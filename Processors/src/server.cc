@@ -124,7 +124,6 @@ int StartService(unsigned port)
             }
             if( clients[0].revents & ZMQ_POLLIN )
             {
-                LOG(info) << "new connection";
                 message_t request;
                 sock.recv(&request);
                 string req( static_cast<const char*>(request.data()), request.size() );

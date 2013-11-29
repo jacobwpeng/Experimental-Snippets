@@ -47,6 +47,7 @@ void Singleton<T>::MakeInstance()
             T& operator=(const T&); \
             static pthread_once_t _pthread_once_flag_; \
             friend class Singleton<T>; \
+            friend class TypeHasMakeInstance<T>; \
             friend class MakeInstanceHelper<T, true>; \
             friend class MakeInstanceHelper<T, false>
 

@@ -23,8 +23,8 @@ class Base
      *-----------------------------------------------------------------------------*/
     public:
         void DoSomething();
-        static Base* MakeInstance() { return new Base(1); }
     private:
+        static Base* MakeInstance() { return new Base(1); }
         Base(int i);
         int i_;
         ENABLE_SINGLETON(Base);

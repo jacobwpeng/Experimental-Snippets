@@ -71,9 +71,9 @@ INode* TableNode::ArrayChildren(unsigned idx)
     return this->children_[ idx ];
 }
 
-vector<INode*> TableNode::Children()
+TableNode::NodeArrayRange TableNode::ChildrenRange()
 {
-    return this->children_;
+    return make_pair( this->children_.begin(), this->children_.end() );
 }
 
 void TableNode::AppendChild(INode* child)

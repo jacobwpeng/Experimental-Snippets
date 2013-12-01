@@ -29,7 +29,7 @@ class TableNode : public INode
 
         /* donot lookup in array part */
         virtual INode* Lookup(const char* child_name);
-        virtual vector<INode*> Children();
+        virtual NodeArrayRange ChildrenRange();
         virtual INode* Children(const char* child_name);
         virtual INode* ArrayChildren(unsigned idx);
         virtual unsigned ArrayChildrenLen() const;

@@ -25,6 +25,7 @@ class LConf
         LConf(const string& conf_path);
         string Lookup(const char* node_name) const;
         ArrayRange LookupArray(const char* array_name);
+        ArrayRange LookupTable(const char* table_name);
 
         bool IsValid() const;
     private:

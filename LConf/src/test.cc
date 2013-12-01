@@ -139,15 +139,14 @@ int main(int argc, char* argv[])
     LConf conf(argv[1]);
     if( conf.IsValid() )
     {
-        //cout << conf.Lookup(argv[2]) << '\n';
-        cout << conf.Lookup("costs.walker31") << '\n';
-        LConf::ArrayRange range = conf.LookupArray("infos");
+        LConf::ArrayRange range = conf.LookupTable("costs.goods.id");
         LConf::ArrayIterator iter = range.first;
         while( iter != range.second )
         {
-            ScalarNode* p = dynamic_cast<ScalarNode*>( (*iter)->Lookup("name") );
+            ScalarNode* p = dynamic_cast<ScalarNode*>(*iter);
             assert(p);
-            cout << "name = " << p->name() << ", value = " << p->value() << '\n';
+            if( p->name().empty() == false ) cout << "name = " << p->name() << " ";
+            cout << "value = " << p->value() << '\n';
             ++iter;
         }
 

@@ -51,6 +51,23 @@ LConf::ArrayRange LConf::LookupArray(const char* array_name)
     return p->ArrayChildrenRange();
 }
 
+LConf::ArrayRange LConf::LookupTable(const char* table_name)
+{
+    INode* pNode = NULL;
+    if( NULL == table_name )
+    {
+        pNode = this->root_;
+    }
+    else
+    {
+        pNode = this->root_->Lookup(table_name);
+    }
+    assert(pNode);
+    TableNode* p = dynamic_cast<TableNode*>( pNode );
+    assert( p != NULL );
+    return p->ChildrenRange();
+}
+
 int LConf::init()
 {
     this->root_ = detail::read_conf(this->conf_path_.c_str());

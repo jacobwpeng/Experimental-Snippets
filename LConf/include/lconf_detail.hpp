@@ -16,7 +16,7 @@
 #include <iostream>
 #include <cassert>
 #include <lua.hpp>
-#include "INode.h"
+#include "node.h"
 #include "table_node.h"
 #include "scalar_node.h"
 

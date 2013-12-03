@@ -14,7 +14,7 @@
 #ifndef  __TABLE_NODE__
 #define  __TABLE_NODE__
 
-#include "INode.h"
+#include "node.h"
 #include <vector>
 using std::pair;
 using std::vector;

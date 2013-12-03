@@ -14,7 +14,7 @@
 #ifndef  __SCALAR_NODE__
 #define  __SCALAR_NODE__
 
-#include "INode.h"
+#include "node.h"
 
 class ScalarNode : public INode
 {

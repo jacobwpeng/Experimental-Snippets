@@ -11,8 +11,8 @@
  */
 
 
-#ifndef  __INODE__
-#define  __INODE__
+#ifndef  __NODE_H__
+#define  __NODE_H__
 
 #include <string>
 using std::string;
@@ -33,4 +33,5 @@ class INode
         bool is_scalar_;
 };
 
-#endif   /* ----- #ifndef __INODE__  ----- */
+
+#endif   /* ----- #ifndef __NODE_H__  ----- */

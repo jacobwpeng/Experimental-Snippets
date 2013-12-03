@@ -1,6 +1,6 @@
 #include <iostream>
 #include <string>
-#include "INode.h"
+#include "node.h"
 #include "table_node.h"
 #include "scalar_node.h"
 #include "lconf.h"

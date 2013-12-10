@@ -16,8 +16,8 @@
 #include <aio.h>
 #include <lua.h>
 
-static const size_t max_info_size = 128;
-typedef struct { struct aiocb m_aiocb; char* buf; int buf_len; int idx; void* handle;} info_t;
+static const size_t max_info_size = 16;
+typedef struct { lua_State* L; struct aiocb m_aiocb; char* buf; int buf_len; int idx; void* handle;} info_t;
 typedef struct { lua_State* L; int fd; int mode; info_t* infos[max_info_size]; } handle_t;
 
 #endif   /* ----- #ifndef __L_AIO__  ----- */

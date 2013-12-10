@@ -50,22 +50,17 @@ static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
 
     if( aio_error(req) != 0 || aio_return(req) <= 0 )
     {
-        printf("error_ret = %d, ret = %d\n", error_ret, ret);
-        lua_pushnil(handle->L);
-        lua_pushliteral(handle->L, "aio error!");
-        ret = lua_resume( handle->L, 2 );
+        //printf("error_ret = %d, ret = %d\n", error_ret, ret);
+        //lua_pushliteral(info->L, "aio error!");
+        ret = lua_resume(info->L, 0);
     }
     else
     {
-        lua_pushlstring(handle->L, info->buf, info->buf_len);
-        ret = lua_resume(handle->L, 1);
+        //printf("L addr : %p, buf addr : %p, buf_len : %u.\n", info->L, info->buf, info->buf_len);
+        lua_pushlstring(info->L, info->buf, info->buf_len);
+        ret = lua_resume(info->L, 1);
     }
 
-    if( lua_isstring( handle->L, -1 ) )
-    {
-        printf("error msg : %s\n", lua_tostring(handle->L, -1) );
-    }
-    printf("lua_resume return %d\n", ret);
 }
 
 static int laio_new_handle(lua_State* L)
@@ -126,7 +121,6 @@ static int laio_new_handle(lua_State* L)
 
 static int laio_read(lua_State* L)
 {
-
     size_t nBytes;
     int ret;
     int offset;
@@ -166,15 +160,16 @@ static int laio_read(lua_State* L)
     info->m_aiocb.aio_sigevent.sigev_signo = SIGIO;
     info->m_aiocb.aio_sigevent.sigev_value.sival_ptr = info;
     info->handle = handle;
+    info->L = L;
 
     ret = aio_read(&info->m_aiocb);
     if( ret < 0 )
     {
         return luaL_error(L, "aio_read failed, ret=%d", ret);
     }
-    printf("start aio_read! fd = %d, offset = %d, buf_size = %d, buf addr : %p\n", handle->fd, offset, buf_size, info->buf);
+    return lua_yield(L, 0);
 
-    return 0;
+    //return 0;
 }
 
 static const struct luaL_Reg aiolib_f[] = {

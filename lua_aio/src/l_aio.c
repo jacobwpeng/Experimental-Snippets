@@ -10,26 +10,53 @@
  * =====================================================================================
  */
 
-#include <fcntl.h>
-#include <aio.h>
 #include <stdio.h>
-#include <lauxlib.h>
-#include <errno.h>
-#include <signal.h>
+#include <assert.h>
 #include <malloc.h>
 #include <memory.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <aio.h>
+#include <errno.h>
+#include <signal.h>
+#include <lauxlib.h>
 #include "l_aio.h"
 
 #define checkhandle(L) \
     (handle_t*) luaL_checkudata(L, 1, metatable_name);
 
 static const char* metatable_name = "l_aio_m";
+static int sig_no;
 
 static int first_slot(info_t** infos, int size)
 {
     int i = 0;
     while( i < size && infos[i] != NULL ) ++i;
     return size == i ? -1 : i;
+}
+
+static void cleanup_info(info_t* info)
+{
+    handle_t* handle;
+    assert(info);
+
+    free( info->buf );
+    handle = info->handle;
+    handle->infos[ info->idx ] = NULL;
+}
+
+static void cleanup_handle(handle_t* handle)
+{
+    assert(handle);
+    int i;
+    close(handle->fd);
+    for( i = 0; i != max_info_size; ++i )
+    {
+        if( handle->infos[i] != NULL )
+        {
+            cleanup_info( handle->infos[i] );
+        }
+    }
 }
 
 static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
@@ -39,7 +66,8 @@ static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
     struct aiocb* req;
     handle_t* handle;
     info_t* info;
-    if( sig_info->si_signo != SIGIO ) return;
+
+    if( sig_info->si_signo != sig_no) return;
 
     info = (info_t*)sig_info->si_value.sival_ptr;
     handle = (handle_t*)info->handle;
@@ -60,6 +88,7 @@ static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
             if( ret == 0 )
             {
                 lua_pushnil(info->L);
+                //cleanup_info(info);
             }
             else
             {
@@ -69,7 +98,8 @@ static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
         }
         else
         {
-            ret = lua_resume(info->L, 0);
+            lua_pushinteger(info->L, ret);
+            ret = lua_resume(info->L, 1);
         }
     }
 }
@@ -77,7 +107,7 @@ static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
 static int laio_new_handle(lua_State* L)
 {
     int i;
-    int mode;
+    int mode = -1;
     int fd;
     char m;
     size_t len;
@@ -168,7 +198,7 @@ static int laio_read(lua_State* L)
     info->m_aiocb.aio_nbytes = buf_size;
     info->m_aiocb.aio_offset = offset;
     info->m_aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
-    info->m_aiocb.aio_sigevent.sigev_signo = SIGIO;
+    info->m_aiocb.aio_sigevent.sigev_signo = sig_no;
     info->m_aiocb.aio_sigevent.sigev_value.sival_ptr = info;
 
     info->handle = handle;
@@ -221,7 +251,7 @@ static int laio_write(lua_State* L)
     info->m_aiocb.aio_nbytes = buf_size;
     info->m_aiocb.aio_offset = offset;
     info->m_aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
-    info->m_aiocb.aio_sigevent.sigev_signo = SIGIO;
+    info->m_aiocb.aio_sigevent.sigev_signo = sig_no;
     info->m_aiocb.aio_sigevent.sigev_value.sival_ptr = info;
 
     info->handle = handle;
@@ -236,6 +266,14 @@ static int laio_write(lua_State* L)
     return lua_yield(L, 0);
 }
 
+static int laio_delete_handle(lua_State* L)
+{
+    handle_t* handle;
+    handle = checkhandle(L);
+    cleanup_handle(handle);
+    return 0;
+}
+
 static const struct luaL_Reg aiolib_f[] = {
     {"new", laio_new_handle},
     {NULL, NULL}
@@ -244,23 +282,28 @@ static const struct luaL_Reg aiolib_f[] = {
 static const struct luaL_Reg aiolib_m[] = {
     {"read", laio_read},
     {"write", laio_write},
+    {"__gc", laio_delete_handle},
     {NULL, NULL}
 };
 
-int luaopen_aio(lua_State* L)
+static int register_signal_handle()
 {
     struct sigaction sig_act;
-    int ret;
-
     sigemptyset(&sig_act.sa_mask);
     sig_act.sa_flags = SA_SIGINFO;
     sig_act.sa_sigaction = aio_completion_handler;
-    ret = sigaction(SIGIO, &sig_act, NULL);
+    return sigaction(sig_no, &sig_act, NULL);
+}
+
+int luaopen_aio(lua_State* L)
+{
+    sig_no = SIGRTMIN + 5;
+    int ret;
+    ret = register_signal_handle();
     if( ret < 0 )
     {
         return luaL_error(L, "set signal handle failed");
     }
-
 
     luaL_newmetatable(L, metatable_name);
 

@@ -16,6 +16,7 @@
 #include <lauxlib.h>
 #include <errno.h>
 #include <signal.h>
+#include <malloc.h>
 #include <memory.h>
 #include "l_aio.h"
 
@@ -44,23 +45,33 @@ static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
     handle = (handle_t*)info->handle;
     req = &info->m_aiocb;
 
-    printf("receive SIGIO\n");
     error_ret = aio_error(req);
     ret = aio_return(req);
 
-    if( aio_error(req) != 0 || aio_return(req) <= 0 )
+    if( error_ret != 0 || ret < 0 )
     {
-        //printf("error_ret = %d, ret = %d\n", error_ret, ret);
-        //lua_pushliteral(info->L, "aio error!");
+        printf("Error return, error_ret = %d, ret = %d\n", error_ret, ret);
         ret = lua_resume(info->L, 0);
     }
     else
     {
-        //printf("L addr : %p, buf addr : %p, buf_len : %u.\n", info->L, info->buf, info->buf_len);
-        lua_pushlstring(info->L, info->buf, info->buf_len);
-        ret = lua_resume(info->L, 1);
+        if( handle->mode == O_RDONLY )
+        {
+            if( ret == 0 )
+            {
+                lua_pushnil(info->L);
+            }
+            else
+            {
+                lua_pushlstring(info->L, info->buf, ret);
+            }
+            ret = lua_resume(info->L, 1);
+        }
+        else
+        {
+            ret = lua_resume(info->L, 0);
+        }
     }
-
 }
 
 static int laio_new_handle(lua_State* L)
@@ -91,7 +102,7 @@ static int laio_new_handle(lua_State* L)
             mode = O_RDONLY;
             break;
         case 'w':
-            mode = O_WRONLY;
+            mode = O_WRONLY | O_CREAT;
             break;
         default:
             luaL_argcheck(L, 0, 2, "invalid mode");
@@ -142,16 +153,16 @@ static int laio_read(lua_State* L)
     nBytes = sizeof(info_t);
 
     info = (info_t*)lua_newuserdata(L, nBytes);
-    info->buf = malloc( buf_size );
     idx = first_slot(&handle->infos[0], max_info_size);
     if( idx == -1 )
     {
         return luaL_error(L, "reach max concurrent async IO limit.");
     }
     info->idx = idx;
-    info->buf_len = buf_size;
 
     memset(&info->m_aiocb, 0, sizeof(info->m_aiocb) );
+    info->buf = malloc( buf_size );
+    info->buf_len = buf_size;
     info->m_aiocb.aio_buf = info->buf;
     info->m_aiocb.aio_fildes = handle->fd;
     info->m_aiocb.aio_nbytes = buf_size;
@@ -159,17 +170,70 @@ static int laio_read(lua_State* L)
     info->m_aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
     info->m_aiocb.aio_sigevent.sigev_signo = SIGIO;
     info->m_aiocb.aio_sigevent.sigev_value.sival_ptr = info;
+
     info->handle = handle;
     info->L = L;
 
     ret = aio_read(&info->m_aiocb);
     if( ret < 0 )
     {
+        free( info->buf );
         return luaL_error(L, "aio_read failed, ret=%d", ret);
     }
     return lua_yield(L, 0);
+}
 
-    //return 0;
+static int laio_write(lua_State* L)
+{
+    size_t buf_size, nBytes;
+    int idx, ret, offset;
+    handle_t* handle;
+    info_t* info;
+    const char* data;
+
+    handle = checkhandle(L);
+    if( handle->mode != (O_WRONLY|O_CREAT) )
+    {
+        return luaL_error(L, "invalid mode");
+    }
+
+    offset = luaL_checkint(L, 2);
+
+    data = lua_tolstring(L, 3, &buf_size);
+
+    nBytes = sizeof(info_t);
+
+    info = (info_t*)lua_newuserdata(L, nBytes);
+    idx = first_slot(&handle->infos[0], max_info_size);
+    if( idx == -1 )
+    {
+        return luaL_error(L, "reach max concurrent async IO limit.");
+    }
+    info->idx = idx;
+
+
+    memset(&info->m_aiocb, 0, sizeof(info->m_aiocb) );
+    info->buf = malloc( buf_size );
+    info->buf_len = buf_size;
+    memcpy( info->buf, data, buf_size );
+    info->m_aiocb.aio_buf = info->buf;
+    info->m_aiocb.aio_fildes = handle->fd;
+    info->m_aiocb.aio_nbytes = buf_size;
+    info->m_aiocb.aio_offset = offset;
+    info->m_aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
+    info->m_aiocb.aio_sigevent.sigev_signo = SIGIO;
+    info->m_aiocb.aio_sigevent.sigev_value.sival_ptr = info;
+
+    info->handle = handle;
+    info->L = L;
+
+    ret = aio_write(&info->m_aiocb);
+    if( ret < 0 )
+    {
+        free( info->buf );
+        return luaL_error(L, "aio_write failed, ret=%d", ret);
+    }
+    return lua_yield(L, 0);
 }
 
 static const struct luaL_Reg aiolib_f[] = {
@@ -179,6 +243,7 @@ static const struct luaL_Reg aiolib_f[] = {
 
 static const struct luaL_Reg aiolib_m[] = {
     {"read", laio_read},
+    {"write", laio_write},
     {NULL, NULL}
 };
 

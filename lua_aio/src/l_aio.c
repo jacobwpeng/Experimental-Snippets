@@ -10,6 +10,7 @@
  * =====================================================================================
  */
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
 #include <malloc.h>
@@ -27,12 +28,36 @@
 
 static const char* metatable_name = "l_aio_m";
 static int sig_no;
+static sigset_t sig_blocked;
+
+#define dump_state(L) \
+    printf("func : %s, line : %d\n", __FUNCTION__, __LINE__); dump_state_internal(L);
+
+static int protect_resume(lua_State* L)
+{
+    int status = lua_status(L);
+    if( status == LUA_YIELD )
+        status = lua_resume(L, 1);
+    return status;
+}
+
+static void dump_state_internal(lua_State* L)
+{
+    int i;
+    int top = lua_gettop(L);
+    for( i = 1; i != top + 1; ++i)
+    {
+        printf("index = %d, type : %s\n", i, luaL_typename(L, i));
+        if( lua_isstring(L, i) ) printf("value : %s\n", lua_tostring(L, i));
+    }
+    printf("********************************************************************************\n");
+}
 
 static int first_slot(info_t** infos, int size)
 {
     int i = 0;
     while( i < size && infos[i] != NULL ) ++i;
-    return size == i ? -1 : i;
+    return i == size ? -1 : i;
 }
 
 static void cleanup_info(info_t* info)
@@ -48,8 +73,9 @@ static void cleanup_info(info_t* info)
 static void cleanup_handle(handle_t* handle)
 {
     assert(handle);
+    printf("cleanup_handle\n");
     int i;
-    close(handle->fd);
+    printf("close return : %d\n", close(handle->fd));
     for( i = 0; i != max_info_size; ++i )
     {
         if( handle->infos[i] != NULL )
@@ -67,6 +93,7 @@ static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
     handle_t* handle;
     info_t* info;
 
+    sigprocmask( SIG_BLOCK, &sig_blocked, NULL);
     if( sig_info->si_signo != sig_no) return;
 
     info = (info_t*)sig_info->si_value.sival_ptr;
@@ -79,7 +106,7 @@ static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
     if( error_ret != 0 || ret < 0 )
     {
         printf("Error return, error_ret = %d, ret = %d\n", error_ret, ret);
-        ret = lua_resume(info->L, 0);
+        ret = protect_resume(info->L);
     }
     else
     {
@@ -88,20 +115,28 @@ static void aio_completion_handler(int signo, siginfo_t* sig_info, void* ctx)
             if( ret == 0 )
             {
                 lua_pushnil(info->L);
-                //cleanup_info(info);
+                cleanup_info(info);
             }
             else
             {
+                //lua_pushliteral(info->L, "read done");
                 lua_pushlstring(info->L, info->buf, ret);
             }
-            ret = lua_resume(info->L, 1);
+            ret = protect_resume(info->L);
         }
         else
         {
             lua_pushinteger(info->L, ret);
-            ret = lua_resume(info->L, 1);
+            ret = protect_resume(info->L);
+        }
+        if( ret != LUA_YIELD && ret != 0 )
+        {
+            printf("top = %d, ret = %d\n", lua_gettop(info->L), ret);
+            dump_state(info->L);
+            abort();
         }
     }
+    sigprocmask( SIG_UNBLOCK, &sig_blocked, NULL);
 }
 
 static int laio_new_handle(lua_State* L)
@@ -142,6 +177,7 @@ static int laio_new_handle(lua_State* L)
     fd = open(filename, mode);
     if( fd < 0 )
     {
+        perror("open");
         return luaL_error(L, "cannot open %s", filename);
     }
     nBytes = sizeof(handle_t);
@@ -171,11 +207,13 @@ static int laio_read(lua_State* L)
     info_t* info;
 
     handle = checkhandle(L);
+    luaL_argcheck(L, handle != NULL, 1, "aio_handle expect");
     if( handle->mode != O_RDONLY )
     {
         return luaL_error(L, "file is not open for read");
     }
 
+    luaL_argcheck(L, lua_isnumber(L, 2), 2, "number expect");
     offset = luaL_checkint(L, 2);
 
     buf_size = luaL_checknumber(L, 3);
@@ -304,6 +342,9 @@ int luaopen_aio(lua_State* L)
     {
         return luaL_error(L, "set signal handle failed");
     }
+
+    sigemptyset(&sig_blocked);
+    sigaddset(&sig_blocked, sig_no);
 
     luaL_newmetatable(L, metatable_name);
 

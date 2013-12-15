@@ -1,0 +1,17 @@
+message ChristmasAct
+{
+    optional uint32 start_time = 1;
+    optional uint32 end_time = 2;
+}
+
+message NoviceLeveling
+{
+    optional uint32 start_time = 1;
+    optional uint32 end_time = 2;
+    optional ChristmasAct christmas_act = 3;
+}
+
+message ActInfo
+{
+    optional NoviceLeveling novice_leveling = 1;
+}

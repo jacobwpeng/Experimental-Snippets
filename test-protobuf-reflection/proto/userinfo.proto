@@ -8,7 +8,8 @@ message NoviceLeveling
 {
     optional uint32 start_time = 1;
     optional uint32 end_time = 2;
-    optional ChristmasAct christmas_act = 3;
+    optional uint32 level = 3;
+    optional ChristmasAct christmas_act = 4;
 }
 
 message ActInfo

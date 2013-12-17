@@ -15,11 +15,10 @@
 
 TEST(reflection, CreateInstance)
 {
-    Base b;
-    ASSERT_STREQ("Base", b.name());
-    /*
-     * Reflection* ref = ReflectionMgr::CreateInstance("Base");
-     * Base* p = dynamic_cast<Base*>( ref );
-     * ASSERT_NE(NULL, p);
-     */
+    Base b(1024);
+    Reflection* ref = ReflectionMgr::GetInstance("Base");
+    Base* p = dynamic_cast<Base*>( ref );
+    ASSERT_FALSE(NULL == p);
+
+    ASSERT_EQ(1024, p->get() );
 }

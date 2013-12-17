@@ -14,6 +14,11 @@
 #ifndef  __REFLECTION_H__
 #define  __REFLECTION_H__
 
+#include <map>
+#include <string>
+using std::string;
+using std::map;
+
 struct Reflection
 {
     virtual ~Reflection(){}
@@ -21,7 +26,27 @@ struct Reflection
 
 struct ReflectionMgr
 {
+    typedef map<string, Reflection*> class_map_t;
+    static void Register(const string& name, Reflection* val);
+    static Reflection* GetInstance(const string& name);
+    static class_map_t* class_map;
 };
+
+ReflectionMgr::class_map_t* ReflectionMgr::class_map = NULL;
+
+void ReflectionMgr::Register(const string& name, Reflection* val)
+{
+    if( ReflectionMgr::class_map == NULL )
+        ReflectionMgr::class_map = new ReflectionMgr::class_map_t;
+    ReflectionMgr::class_map->insert( ReflectionMgr::class_map_t::value_type(name, val) );
+}
+
+Reflection* ReflectionMgr::GetInstance(const string& name)
+{
+    ReflectionMgr::class_map_t::iterator iter = ReflectionMgr::class_map->find( name );
+    if( iter == ReflectionMgr::class_map->end() ) return NULL;
+    return iter->second;
+}
 
 template<typename T, const char* Name>
 struct Reflection_tmpl : public Reflection
@@ -40,6 +65,7 @@ const char* Reflection_tmpl<T, Name>::TypeName = Name;
 template<typename T, const char* Name>
 Reflection_tmpl<T, Name>::Reflection_tmpl()
 {
+    ReflectionMgr::Register( Name, this );
 }
 
 template<typename T, const char* Name>

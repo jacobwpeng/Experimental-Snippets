@@ -28,8 +28,13 @@ namespace reflection
 class Base : public Reflection_tmpl<Base, reflection::BaseNames::Base_Name>
 {
     public:
-        Base(){}
+        Base(int i)
+        :i_(i) {}
         virtual ~Base() {}
+
+        int get() const { return this->i_; }
+    private:
+        int i_;
 };
 
 #endif   /* ----- #ifndef __BASE_H__  ----- */

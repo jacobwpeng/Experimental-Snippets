@@ -53,9 +53,42 @@ T* GetMessage(Message* pInfo, const string& name)
     return dynamic_cast<T*>(p);
 }
 
-TEST(ReflectionTest, GetInstance)
+TEST(Protobuf, MessageSize)
 {
-    ActInfo info;
-    ChristmasAct* p = GetMessage<ChristmasAct>(&info, "novice_leveling.christmas_act");
-    EXPECT_TRUE( p != NULL );
+    ExchangePresentsInfo info;
+    info.set_uin( 2191195 );
+    info.set_last_login_time( 0 );
+    info.set_unprocessed_message_count( 0 );
+
+    for( unsigned idx = 0; idx != 5; ++idx )
+    {
+        SendRecord* p = info.mutable_send_records()->Add();
+        p->set_uin( 1234567890 );
+        p->set_type( RESPONSE_REQUEST );
+    }
+
+    for( unsigned idx = 0; idx != 5; ++idx )
+    {
+        ReceiveRecord * p = info.mutable_receive_records()->Add();
+        p->set_uin( 1234567890 );
+        p->set_type( BY_OTHER_ACTIVE );
+    }
+
+    for( unsigned idx = 0; idx != 30; ++idx )
+    {
+        RequestRecord * p = info.mutable_request_records()->Add();
+        p->set_uin( 1234567890 );
+    }
+
+    for( unsigned idx = 0; idx != 25; ++idx )
+    {
+        Notification  * p = info.mutable_notifications()->Add();
+        p->set_uin( 1234567890 );
+        p->set_type( REQUEST_GIFT );
+        GoodsInfo * pGoodsInfo = p->mutable_goods_list()->Add();
+        pGoodsInfo->set_id( 3000 );
+        pGoodsInfo->set_count( 1 );
+    }
+
+    cout << info.ByteSize() << '\n';
 }

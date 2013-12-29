@@ -1,19 +1,14 @@
 enum SendRecordType
 {
-    ACTIVE = 1;
+    SELF_ACTIVE = 1;
     RESPONSE_REQUEST = 2;
-}
-
-enum ReceiveRecordType
-{
-    BY_SELF_REQUEST = 1;
-    BY_OTHER_ACTIVE = 2;
 }
 
 enum NotificationType
 {
     REQUEST_GIFT = 1;
     RECEIVE_GIFT = 2;
+    NIL = 3; /* for lazy deletion */
 }
 
 message GoodsInfo
@@ -31,7 +26,6 @@ message SendRecord
 message ReceiveRecord
 {
     required uint32 uin = 1;
-    required ReceiveRecordType type = 2;
 }
 
 message RequestRecord
@@ -42,11 +36,13 @@ message RequestRecord
 message Notification
 {
     required uint32 uin = 1;
-    required NotificationType type = 2;
-    repeated GoodsInfo goods_list = 3;
+    required uint32 id = 2;
+    required NotificationType type = 3;
+    required uint32 create_time = 4;
+    repeated GoodsInfo goods_list = 5;
 }
 
-message ExchangePresentsInfo
+message ExchangeGiftsInfo
 {
     repeated SendRecord send_records = 1;
     repeated ReceiveRecord receive_records = 2;
@@ -54,5 +50,6 @@ message ExchangePresentsInfo
     repeated Notification notifications = 4;
     required uint32 uin = 5;
     required uint32 last_login_time = 6;
-    required uint32 unprocessed_message_count = 7;
+    required uint32 last_notification_id = 7;
+    required uint32 unprocessed_message_count = 8;
 }

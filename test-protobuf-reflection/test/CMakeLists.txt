@@ -6,10 +6,11 @@ SET(CMAKE_FIND_LIBRARY_SUFFIXES ".so" ".a")
 
 INCLUDE_DIRECTORIES(/opt/include)
 INCLUDE_DIRECTORIES(../include)
+INCLUDE_DIRECTORIES(../../Singleton/include)
 
 FIND_LIBRARY(PROTOBUF "protobuf")
 FIND_LIBRARY(GTEST "gtest")
-LIST(APPEND APP_SRC_LIST main.cc test.cc userinfo.pb.cc)
+LIST(APPEND APP_SRC_LIST main.cc test.cc ../src/exchange_gifts_info.pb.cc ../src/exchange_gifts.cc ../src/exchange_gifts_info_mgr.cc)
 
 ADD_DEFINITIONS( -O2 )
 

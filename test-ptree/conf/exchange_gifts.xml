@@ -1,0 +1,18 @@
+<root>
+    <base_conf>
+        <max_day_request_num val="30" />
+        <max_day_request_num_to_same_uin val="1" />
+        <max_day_send_num val="5" />
+        <max_day_send_num_to_same_uin val="1" />
+        <max_day_receive_num val="5" />
+        <max_day_receive_num_from_same_uin val="1" />
+        <request_notification_num val="10" />
+        <receive_notification_num val="15" />
+        <notification_ttl val="5" />
+    </base_conf>
+    <goods_conf>
+        <goods_list>
+            <goods id="3001" count="1" />
+        </goods_list>
+    </goods_conf>
+</root>

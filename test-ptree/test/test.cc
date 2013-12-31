@@ -20,9 +20,13 @@
 
 using namespace std;
 
+#ifndef CONF_PATH
+#define CONF_PATH "/home/work/repos/test/test-ptree/conf"
+#endif
+
 TEST(ptree, test_read_attributes)
 {
-    static const char* filename = "/home/work/repos/test/test-ptree/conf/exchange_gifts.xml";
+    static const char* filename = CONF_PATH"/exchange_gifts.xml";
     using boost::property_tree::ptree;
     ptree pt;
     read_xml(filename, pt);

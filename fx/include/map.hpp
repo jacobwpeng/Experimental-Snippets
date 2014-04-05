@@ -125,24 +125,7 @@ namespace FX
 
             ~Map()
             {
-                Pvoid_t raw_ptr = NULL;
-                Word_t addr;
-                Word_t idx = 0;
-                int ret;
-
-                JLF(raw_ptr, arr_, idx); 
-                while( raw_ptr != NULL )
-                {
-                    mapped_type * obj_ptr;
-                    addr = *static_cast<PWord_t>(raw_ptr);
-                    obj_ptr = reinterpret_cast<mapped_type*>(addr);
-                    allocator_.destroy( obj_ptr );
-                    allocator_.deallocate( obj_ptr, 1 );
-
-                    JLD( ret, arr_, idx );
-                    JLN( raw_ptr, arr_, idx );
-                }
-                arr_ = NULL;
+                clear();
             }
 
             iterator find( key_param_type key )
@@ -216,6 +199,29 @@ namespace FX
             }
 
             size_type size() const { return this->size_; }
+            bool empty() const { return this->size_ == 0; }
+
+            void clear()
+            {
+                Pvoid_t raw_ptr = NULL;
+                Word_t addr;
+                Word_t idx = 0;
+                int ret;
+
+                JLF(raw_ptr, arr_, idx);
+                while( raw_ptr != NULL )
+                {
+                    mapped_type * obj_ptr;
+                    addr = *static_cast<PWord_t>(raw_ptr);
+                    obj_ptr = reinterpret_cast<mapped_type*>(addr);
+                    allocator_.destroy( obj_ptr );
+                    allocator_.deallocate( obj_ptr, 1 );
+
+                    JLD( ret, arr_, idx );
+                    JLN( raw_ptr, arr_, idx );
+                }
+                arr_ = NULL;
+            }
 
             unsigned long ByteSize() const
             {

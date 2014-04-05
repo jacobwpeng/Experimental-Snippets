@@ -72,8 +72,10 @@ int TestJudyMap(int argc, char * argv[])
     }
     cout << "size = " << m.size() << '\n';
 
-    U2UMap::Iterator iter = m.find(5);
-    m.erase( iter );
+    for( unsigned idx = 0; idx != times; ++idx )
+    {
+        m.erase(idx);
+    }
 
     cout << "size = " << m.size() << '\n';
 

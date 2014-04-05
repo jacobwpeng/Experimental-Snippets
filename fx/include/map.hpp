@@ -14,16 +14,11 @@
 
 #include <cassert>
 #include <memory>
-#include <iostream>
 
 #include <boost/type_traits.hpp>
 #include <boost/call_traits.hpp>
 
 #include <Judy.h>
-
-using std::cout;
-using std::cerr;
-using std::boolalpha;
 
 namespace FX
 {
@@ -43,6 +38,9 @@ namespace FX
             typedef std::pair<k, v> value_type;
             typedef key_converter key_converter_type;
             typedef alloc allocator_type;
+            typedef size_t size_type;
+
+            typedef typename boost::call_traits<key_type>::param_type key_param_type;
 
             struct Iterator
             {
@@ -76,24 +74,31 @@ namespace FX
                     }
                 }
 
-                bool operator==(const Iterator& rhs)
+                Iterator operator++(int)
+                {
+                    Iterator res(*this);
+                    ++res;
+                    return res;
+                }
+
+                bool operator==(const Iterator& rhs) const
                 {
                     return arr_ == rhs.arr_ && raw_key_ == rhs.raw_key_;
                 }
 
-                bool operator!=(const Iterator& rhs)
+                bool operator!=(const Iterator& rhs) const
                 {
                     return !(this->operator==(rhs));
                 }
 
-                value_type operator*()
+                value_type operator*() const
                 {
                     assert( Valid() );
                     return val_;
                 }
 
                 private:
-                    bool Valid()
+                    bool Valid() const
                     {
                         return arr_ != NULL;
                     }
@@ -121,31 +126,26 @@ namespace FX
             ~Map()
             {
                 Pvoid_t raw_ptr = NULL;
-                //Word_t addr;
+                Word_t addr;
                 Word_t idx = 0;
-                //int ret;
+                int ret;
 
                 JLF(raw_ptr, arr_, idx); 
                 while( raw_ptr != NULL )
                 {
-                    cerr << raw_ptr << ", key = " << idx << '\n';
-                    //mapped_type * obj_ptr;
-                    //addr = *static_cast<PWord_t>(raw_ptr);
-                    //obj_ptr = reinterpret_cast<mapped_type*>(addr);
-                    //allocator_.destroy( obj_ptr );
-                    //allocator_.deallocate( obj_ptr, 1 );
+                    mapped_type * obj_ptr;
+                    addr = *static_cast<PWord_t>(raw_ptr);
+                    obj_ptr = reinterpret_cast<mapped_type*>(addr);
+                    allocator_.destroy( obj_ptr );
+                    allocator_.deallocate( obj_ptr, 1 );
 
-                    //JLD( ret, arr_, idx );
+                    JLD( ret, arr_, idx );
                     JLN( raw_ptr, arr_, idx );
                 }
-
-                int freed;
-                JLFA(freed, arr_);
-                cerr << freed << '\n';
                 arr_ = NULL;
             }
 
-            iterator find( typename boost::call_traits<key_type>::param_type key )
+            iterator find( key_param_type key )
             {
                 Pvoid_t ptr_val;
                 Word_t idx = key_converter_type()(key);
@@ -194,17 +194,29 @@ namespace FX
                 }
             }
 
-            void erase( iterator pos )
+            void erase( const iterator& pos )
             {
                 assert( pos.Valid() );
                 assert( pos.arr_ == arr_ );
                 int ret = 0;
-                JLD(ret, pos.arr_, pos.raw_key_ );
+                JLD(ret, arr_, pos.raw_key_ );
                 assert( ret == 1 );
                 --size_;
             }
 
-            size_t size() const { return this->size_; }
+            size_type erase( key_param_type key )
+            {
+                Iterator iter = this->find(key);
+                if( iter == this->end() ) return 0;
+                else
+                {
+                    erase(iter);
+                    return 1;
+                }
+            }
+
+            size_type size() const { return this->size_; }
+
             unsigned long ByteSize() const
             {
                 Word_t used;

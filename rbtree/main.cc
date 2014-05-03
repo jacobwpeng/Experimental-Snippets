@@ -9,20 +9,54 @@
  * =====================================================================================
  */
 
+#include <ctime>
+#include <cstdlib>
 #include <cassert>
 #include <string>
 #include <map>
+#include <set>
 #include <vector>
 #include <iostream>
+#include <boost/pool/pool.hpp>
 #include <boost/pool/object_pool.hpp>
+#include <boost/optional/optional.hpp>
 
 using namespace std;
+
+template<typename T>
+class ObjectPool
+{
+    public:
+        ObjectPool()
+            :p_( sizeof(T) )
+        { 
+        }
+
+        ~ObjectPool()
+        { 
+        }
+
+        T * Construct()
+        {
+            return new (p_.malloc()) T;
+        }
+
+        void Destroy(T* ptr)
+        {
+            ptr->~T();
+            p_.free(ptr);
+        }
+
+    private:
+        boost::pool<> p_;
+};
 
 class RBTree
 {
     public:
-        typedef int KeyType;
+        typedef unsigned KeyType;
         typedef unsigned ValueType;
+        typedef boost::optional<ValueType> OptionalValueType;
 
     private:
         enum Color
@@ -48,22 +82,33 @@ class RBTree
 
     public:
         RBTree()
-            :root_(NULL)
+            :root_(NULL), height_(0)
         {
         }
 
         void Put(KeyType k, ValueType v)
         {
             root_ = Put(root_, k, v);
-            root_->c = kBlack;
+            if( root_->c == kRed )
+            {
+                ++height_;
+                root_->c = kBlack;
+            }
         }
+
+        OptionalValueType Get(KeyType k)
+        {
+            return Get(root_, k);
+        }
+
+        size_t Height() const { return height_; }
 
     private:
         RBNode * Put(RBNode* node, KeyType k, ValueType v)
         {
             if( node == NULL )
             {
-                RBNode * new_node = node_pool_.construct();
+                RBNode * new_node = node_pool_.Construct();
                 new_node->k = k;
                 new_node->v = v;
                 return new_node;
@@ -73,12 +118,12 @@ class RBTree
                 if( k > node->k )
                 {
                     node->r = Put(node->r, k, v);
-                    node->r->p = KeepBalance(node);
+                    node = KeepBalance(node);
                 }
                 else if( k < node->k )
                 {
                     node->l = Put(node->l, k, v);
-                    node->l->p = KeepBalance(node);
+                    node = KeepBalance(node);
                 }
                 else
                 {
@@ -91,17 +136,17 @@ class RBTree
         RBNode * KeepBalance( RBNode * node )
         {
             assert( node );
-            if( node->r->c == kRed )
+            if( node->r and node->r->c == kRed )
             {
                 node = RotateLeft(node);
             }
 
-            if( node->c == kRed )
+            if( node->l and node->l->c == kRed and node->l->l and node->l->l->c == kRed )
             {
                 node = RotateRight(node);
             }
 
-            if( node->l->c == kRed and node->r->c == kRed )
+            if( node->l and node->l->c == kRed and node->r and node->r->c == kRed )
             {
                 FlipColors(node);
             }
@@ -157,13 +202,42 @@ class RBTree
             node->r->c = kBlack;
         }
 
+        OptionalValueType Get(RBNode * node, KeyType k)
+        {
+            if( node == NULL ) { return OptionalValueType(); }
+            if( k == node->k ) return node->v;
+            else if( k > node->k ) return Get(node->r, k);
+            else return Get(node->l, k);
+        }
+
     private:
-        boost::object_pool<RBNode> node_pool_;
+        ObjectPool<RBNode> node_pool_;
         RBNode * root_;
+        size_t height_;
 };
 
-int main()
+int main(int argc, char * argv[])
 {
+    srand( time(NULL) );
+    (void)argv;
+
+    const size_t kNodeCount = 1 << 24;
     RBTree t;
-    t.Put(3, 5);
+    map<unsigned, unsigned> m;
+
+    if( argc == 1 )
+    {
+        cout << "Test RBTree\n";
+        for( size_t idx = 0; idx != kNodeCount; ++idx )
+            t.Put( idx, idx );
+    }
+    else
+    {
+        cout << "Test std::map\n";
+        for( size_t idx = 0; idx != kNodeCount; ++idx )
+            m[idx] = idx;
+    }
+    //cout << "Wait for input...\n";
+    //char c;
+    //cin >> c;
 }

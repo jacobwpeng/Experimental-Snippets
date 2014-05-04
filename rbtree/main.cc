@@ -88,7 +88,7 @@ class RBTree
 
     public:
         RBTree()
-            :root_(NULL), height_(0)
+            :root_(NULL), size_(0)
         {
         }
 
@@ -97,7 +97,6 @@ class RBTree
             root_ = Put(root_, k, v);
             if( root_->c == kRed )
             {
-                ++height_;
                 root_->c = kBlack;
             }
         }
@@ -119,7 +118,19 @@ class RBTree
             if( root_ ) root_->c = kBlack;
         }
 
-        size_t Height() const { return height_; }
+        size_t Delete( KeyType k )
+        {
+            try
+            {
+                root_ = Delete( root_, k );
+                return 1;
+            }catch(...)
+            {
+                return 0;
+            }
+        }
+
+        size_t size() const { return size_; }
 
     private:
         RBNode * Put(RBNode* node, KeyType k, ValueType v)
@@ -129,6 +140,7 @@ class RBTree
                 RBNode * new_node = node_pool_.Construct();
                 new_node->k = k;
                 new_node->v = v;
+                ++size_;
                 return new_node;
             }
             else
@@ -226,7 +238,7 @@ class RBTree
             else return Get(node->l, k);
         }
 
-        const RBNode * GetMin(RBNode * node) const
+        RBNode * GetMin(RBNode * node) const
         {
             assert( node );
             while( node->l != NULL )
@@ -243,15 +255,16 @@ class RBTree
             if( node->l == NULL )
             {
                 node_pool_.Destroy( node );
+                --size_;
                 return NULL;
             }
 
-            if( node->l->c == kBlack and node->l->l and node->l->l->c == kBlack )
+            if( node->l->c == kBlack and (node->l->l == NULL or node->l->l->c == kBlack) )
             {
                 node = MoveRedLeft( node );
             }
             node->l = DeleteMin( node->l );
-            return node;
+            return KeepBalance(node);
         }
 
         RBNode * MoveRedLeft( RBNode * node )
@@ -259,16 +272,93 @@ class RBTree
             assert( node );
             assert( node->l );
             assert( node->l->c == kBlack );
-            assert( node->l->l );
-            assert( node->l->l->c == kBlack );
+            assert( node->l->l == NULL or node->l->l->c == kBlack );
             FlipColors(node);
-            return NULL;
+
+            if( node->r->l and node->r->l->c == kRed )
+            {
+                node->r = RotateRight( node->r );
+                node = RotateLeft( node );
+                FlipColors(node);
+            }
+            return node;
+        }
+
+        RBNode * MoveRedRight( RBNode * node )
+        {
+            assert( node );
+            assert( node->r );
+            assert( node->r->c == kBlack );
+            assert( node->r->r == NULL or node->r->r->c == kBlack );
+
+            FlipColors(node);
+            if( node->l->l and node->l->l->c == kRed )
+            {
+                node = RotateRight(node);
+                FlipColors(node);
+            }
+
+            return node;
+        }
+
+        RBNode * Delete( RBNode * node, KeyType k )
+        {
+            assert( node );
+
+            if( k < node->k )
+            {
+                if( node->l == NULL ) throw 0;
+                if( node->l->c == kBlack and ( node->l->l == NULL or node->l->l->c == kBlack ) )
+                {
+                    node = MoveRedLeft( node );
+                }
+
+                node->l = Delete( node->l, k );
+            }
+            else
+            {
+                if( node->l != NULL and node->l->c == kRed )
+                {
+                    node = RotateRight( node );
+                }
+
+                if( k == node->k and node->r == NULL )
+                {
+                    node_pool_.Destroy(node);
+                    --size_;
+                    return NULL;
+                }
+
+                if( node->r->c == kBlack and (node->r->r == NULL or node->r->r->c == kBlack))
+                {
+                    node = MoveRedRight(node);
+                }
+
+                if( k == node->k )
+                {
+                    RBNode * successor = GetMin(node->r);
+                    swap( successor->p, node->p );
+                    swap( successor->l, node->l );
+                    swap( successor->r, node->r );
+                    swap( successor->c, node->c );
+
+                    node = successor;
+
+                    node->r = DeleteMin( node->r );
+                }
+                else
+                {
+                    if( node->r == NULL ) throw 0;
+                    node->r = Delete( node->r, k );
+                }
+            }
+            return KeepBalance(node);
         }
 
     private:
         ObjectPool<RBNode> node_pool_;
         RBNode * root_;
-        size_t height_;
+        size_t size_;
 };
 
 int main(int argc, char * argv[])
@@ -279,40 +369,23 @@ int main(int argc, char * argv[])
     const size_t kNodeCount = 1 << 20;
     RBTree t;
     map<unsigned, unsigned> m;
+    typedef map<unsigned, unsigned>::value_type value_type;
     set<unsigned> keys;
 
     for( size_t idx = 0; idx != kNodeCount; ++idx )
     {
-        unsigned k = rand();
-        //keys.insert(k);
+        unsigned k = rand() % kNodeCount;
         t.Put( k, idx );
         m[k] = idx;
     }
 
-    cout << t.Height() << '\n';
+    assert( t.GetMin() == m.begin()->second );
 
-    //BOOST_FOREACH( unsigned k, keys )
-    //{
-    //    RBTree::OptionalValueType opt_val = t.Get(k);
-    //    assert( opt_val );
-    //    assert( opt_val.get() == m[k] );
-    //}
+    cout << "size = " << t.size() << '\n';
 
-    //assert( t.GetMin() == m.begin()->second );
+    BOOST_FOREACH( const value_type& p, m )
+        assert( t.Delete( p.first ) == 1 );
 
-    //if( argc == 1 )
-    //{
-    //    cout << "Test RBTree\n";
-    //    for( size_t idx = 0; idx != kNodeCount; ++idx )
-    //        t.Put( idx, idx );
-    //}
-    //else
-    //{
-    //    cout << "Test std::map\n";
-    //    for( size_t idx = 0; idx != kNodeCount; ++idx )
-    //        m[idx] = idx;
-    //}
-    //cout << "Wait for input...\n";
-    //char c;
-    //cin >> c;
+    cout << "size = " << t.size() << '\n';
+
 }

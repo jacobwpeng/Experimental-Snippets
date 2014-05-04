@@ -18,6 +18,7 @@
 #include <vector>
 #include <iostream>
 #include <boost/foreach.hpp>
+#include <boost/call_traits.hpp>
 #include <boost/pool/pool.hpp>
 #include <boost/pool/object_pool.hpp>
 #include <boost/optional/optional.hpp>
@@ -52,11 +53,14 @@ class ObjectPool
         boost::pool<> p_;
 };
 
+template<typename _Key, typename _Val >
 class RBTree
 {
     public:
-        typedef unsigned KeyType;
-        typedef unsigned ValueType;
+        typedef _Key KeyType;
+        typedef _Val ValueType;
+        typedef typename boost::call_traits<KeyType>::param_type KeyParamType;
+        typedef typename boost::call_traits<ValueType>::param_type ValueParamType;
         typedef boost::optional<ValueType> OptionalValueType;
 
     private:
@@ -92,7 +96,7 @@ class RBTree
         {
         }
 
-        void Put(KeyType k, ValueType v)
+        void Put(KeyParamType k, ValueParamType v)
         {
             root_ = Put(root_, k, v);
             if( root_->c == kRed )
@@ -101,7 +105,7 @@ class RBTree
             }
         }
 
-        OptionalValueType Get(KeyType k)
+        OptionalValueType Get(KeyParamType k)
         {
             return Get(root_, k);
         }
@@ -118,7 +122,7 @@ class RBTree
             if( root_ ) root_->c = kBlack;
         }
 
-        size_t Delete( KeyType k )
+        size_t Delete( KeyParamType k )
         {
             try
             {
@@ -133,7 +137,7 @@ class RBTree
         size_t size() const { return size_; }
 
     private:
-        RBNode * Put(RBNode* node, KeyType k, ValueType v)
+        RBNode * Put(RBNode* node, KeyParamType k, ValueParamType v)
         {
             if( node == NULL )
             {
@@ -230,7 +234,7 @@ class RBTree
             node->r->FlipColor();
         }
 
-        OptionalValueType Get(RBNode * node, KeyType k)
+        OptionalValueType Get(RBNode * node, KeyParamType k)
         {
             if( node == NULL ) { return OptionalValueType(); }
             if( k == node->k ) return node->v;
@@ -301,7 +305,7 @@ class RBTree
             return node;
         }
 
-        RBNode * Delete( RBNode * node, KeyType k )
+        RBNode * Delete( RBNode * node, KeyParamType k )
         {
             assert( node );
 
@@ -361,31 +365,59 @@ class RBTree
         size_t size_;
 };
 
+struct Base
+{
+    Base()
+    {
+        cout << __FUNCTION__ << '\n';
+    }
+
+    Base(const Base& b)
+    {
+        cout << __FUNCTION__ << '\n';
+    }
+
+    Base& operator=(const Base& )
+    {
+        cout << __FUNCTION__ << '\n';
+        return *this;
+    }
+};
+
 int main(int argc, char * argv[])
 {
     srand( time(NULL) );
     (void)argv;
 
     const size_t kNodeCount = 1 << 20;
-    RBTree t;
-    map<unsigned, unsigned> m;
-    typedef map<unsigned, unsigned>::value_type value_type;
-    set<unsigned> keys;
-
+    RBTree<unsigned, Base> t;
+    map<unsigned, Base> m;
     for( size_t idx = 0; idx != kNodeCount; ++idx )
     {
-        unsigned k = rand() % kNodeCount;
-        t.Put( k, idx );
-        m[k] = idx;
+        t.Put( idx, Base() );
     }
 
-    assert( t.GetMin() == m.begin()->second );
+    cout << t.size() << '\n';
 
-    cout << "size = " << t.size() << '\n';
+    //RBTree<unsigned, unsigned> t;
+    //map<unsigned, unsigned> m;
+    //typedef map<unsigned, unsigned>::value_type value_type;
+    //set<unsigned> keys;
 
-    BOOST_FOREACH( const value_type& p, m )
-        assert( t.Delete( p.first ) == 1 );
+    //for( size_t idx = 0; idx != kNodeCount; ++idx )
+    //{
+    //    unsigned k = rand() % kNodeCount;
+    //    t.Put( k, idx );
+    //    m[k] = idx;
+    //}
 
-    cout << "size = " << t.size() << '\n';
+    //assert( t.GetMin() == m.begin()->second );
+
+    //cout << "size = " << t.size() << '\n';
+
+    //BOOST_FOREACH( const value_type& p, m )
+    //    assert( t.Delete( p.first ) == 1 );
+
+    //cout << "size = " << t.size() << '\n';
 
 }

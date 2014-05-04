@@ -17,6 +17,7 @@
 #include <set>
 #include <vector>
 #include <iostream>
+#include <boost/foreach.hpp>
 #include <boost/pool/pool.hpp>
 #include <boost/pool/object_pool.hpp>
 #include <boost/optional/optional.hpp>
@@ -61,7 +62,7 @@ class RBTree
     private:
         enum Color
         {
-            kRed = 1,
+            kRed = 0,
             kBlack
         };
 
@@ -71,6 +72,11 @@ class RBTree
                 :c(kRed), p(NULL), l(NULL), r(NULL)
             {
             };
+
+            void FlipColor()
+            {
+                c = static_cast<Color>(1-c);
+            }
 
             KeyType k;
             ValueType v;
@@ -99,6 +105,18 @@ class RBTree
         OptionalValueType Get(KeyType k)
         {
             return Get(root_, k);
+        }
+
+        ValueType GetMin() const
+        {
+            const RBNode * node = GetMin(root_);
+            return node->v;
+        }
+
+        void DeleteMin()
+        {
+            root_ = DeleteMin(root_);
+            if( root_ ) root_->c = kBlack;
         }
 
         size_t Height() const { return height_; }
@@ -193,13 +211,11 @@ class RBTree
         {
             assert( node );
             assert( node->l );
-            assert( node->l->c == kRed );
             assert( node->r );
-            assert( node->r->c == kRed );
 
-            node->c = kRed;
-            node->l->c = kBlack;
-            node->r->c = kBlack;
+            node->FlipColor();
+            node->l->FlipColor();
+            node->r->FlipColor();
         }
 
         OptionalValueType Get(RBNode * node, KeyType k)
@@ -208,6 +224,45 @@ class RBTree
             if( k == node->k ) return node->v;
             else if( k > node->k ) return Get(node->r, k);
             else return Get(node->l, k);
+        }
+
+        const RBNode * GetMin(RBNode * node) const
+        {
+            assert( node );
+            while( node->l != NULL )
+            {
+                node = node->l;
+            }
+
+            return node;
+        }
+
+        RBNode * DeleteMin(RBNode * node)
+        {
+            assert( node );
+            if( node->l == NULL )
+            {
+                node_pool_.Destroy( node );
+                return NULL;
+            }
+
+            if( node->l->c == kBlack and node->l->l and node->l->l->c == kBlack )
+            {
+                node = MoveRedLeft( node );
+            }
+            node->l = DeleteMin( node->l );
+            return node;
+        }
+
+        RBNode * MoveRedLeft( RBNode * node )
+        {
+            assert( node );
+            assert( node->l );
+            assert( node->l->c == kBlack );
+            assert( node->l->l );
+            assert( node->l->l->c == kBlack );
+            FlipColors(node);
+            return NULL;
         }
 
     private:
@@ -221,22 +276,42 @@ int main(int argc, char * argv[])
     srand( time(NULL) );
     (void)argv;
 
-    const size_t kNodeCount = 1 << 24;
+    const size_t kNodeCount = 1 << 20;
     RBTree t;
     map<unsigned, unsigned> m;
+    set<unsigned> keys;
 
-    if( argc == 1 )
+    for( size_t idx = 0; idx != kNodeCount; ++idx )
     {
-        cout << "Test RBTree\n";
-        for( size_t idx = 0; idx != kNodeCount; ++idx )
-            t.Put( idx, idx );
+        unsigned k = rand();
+        //keys.insert(k);
+        t.Put( k, idx );
+        m[k] = idx;
     }
-    else
-    {
-        cout << "Test std::map\n";
-        for( size_t idx = 0; idx != kNodeCount; ++idx )
-            m[idx] = idx;
-    }
+
+    cout << t.Height() << '\n';
+
+    //BOOST_FOREACH( unsigned k, keys )
+    //{
+    //    RBTree::OptionalValueType opt_val = t.Get(k);
+    //    assert( opt_val );
+    //    assert( opt_val.get() == m[k] );
+    //}
+
+    //assert( t.GetMin() == m.begin()->second );
+
+    //if( argc == 1 )
+    //{
+    //    cout << "Test RBTree\n";
+    //    for( size_t idx = 0; idx != kNodeCount; ++idx )
+    //        t.Put( idx, idx );
+    //}
+    //else
+    //{
+    //    cout << "Test std::map\n";
+    //    for( size_t idx = 0; idx != kNodeCount; ++idx )
+    //        m[idx] = idx;
+    //}
     //cout << "Wait for input...\n";
     //char c;
     //cin >> c;

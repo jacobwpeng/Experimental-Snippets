@@ -53,6 +53,17 @@ class Trie
     private:
         struct TrieNode
         {
+            TrieNode(unsigned char_num)
+            {
+                arr = new TrieNode*[char_num];
+                memset( arr, 0x0, char_num );
+            }
+
+            ~TrieNode()
+            {
+                delete [] arr;
+            }
+
             char c;
             TrieNode** arr;
             ValueType v;
@@ -60,10 +71,7 @@ class Trie
 
         TrieNode * MakeTrieNode()               /* TODO:better performace */
         {
-            TrieNode * node = new TrieNode;
-            typedef TrieNode* TrieNodePtr;
-            node->arr = new TrieNodePtr[alpha_.CharNum()];
-            memset( node->arr, 0x0, alpha_.CharNum() );
+            TrieNode * node = new TrieNode( alpha_.CharNum() );
             return node;
         }
 

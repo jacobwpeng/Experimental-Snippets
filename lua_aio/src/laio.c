@@ -300,11 +300,7 @@ int laio_waitone(lua_State* L)
         lua_pop(L, 1);
     }
 
-    if (any_done == 1)
-    {
-        /* remove this pair */
-        return 2;
-    }
+    if (any_done == 1) return 2;
     else if (empty_table == 1) return 0;
     else
     {
@@ -326,7 +322,6 @@ int laio_waitone(lua_State* L)
                 lua_pop(L, 1);                      /* pop the value */
             }
         }while (any_done == 0);
-        /* remove this pair */
         sigprocmask(SIG_UNBLOCK, &sig_blocked, NULL);
 
         return 2;

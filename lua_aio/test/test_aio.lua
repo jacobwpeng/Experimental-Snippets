@@ -2,37 +2,28 @@
 
 local aio = require 'aio'
 
-function AddTask(input, out, piece_size)
-    assert( input )
-    assert( out )
-    local r_handle = aio.new(input, 'r')
-    local w_handle = aio.new(out, 'w')
+local r_handle = aio.new('Makefile', 'r')
+local w_handle = aio.new('/tmp/Makefile', 'w')
 
-    piece_size = piece_size and piece_size or 100
-    return coroutine.create( function()
-                                 local offset = 0
-                                 while 1 do
-                                     local data = r_handle:read(offset, piece_size)
-                                     if not data then break end
-                                     local bytes_write = w_handle:write(offset, data)
-                                     io.write( string.format('bytes write : %d\n', bytes_write) )
-                                     offset = offset + string.len(data)
-                                 end
-                             end )
-end
-local idx = 0
-local co_t = {}
-local co = AddTask('/tmp/Makefile', '/tmp/dump', 1024)
-co_t[#co_t+1] = co
+local promises = {} 
+local offset = 0
+local size = 1024
 
-co = AddTask('/tmp/CMakeCache.txt', '/tmp/CMakeCache.txt.dump', 1024)
-co_t[#co_t+1] = co
-coroutine.resume( co_t[1] )
-coroutine.resume( co_t[2] )
-while 1 do
-    local flag = true
-    for _, v in ipairs(co_t) do
-        flag = flag and coroutine.status(v) == 'dead'
-    end
-    if flag then break end
+for i = 1, 5 do
+    promises[i] = r_handle:read(offset, size)
+    offset = offset + size
 end
+
+aio.wait( promises )
+
+local write_promises = {}
+offset = 0
+for i = 1, 5 do
+    local data = promises[i]:retrieve()
+    local len = string.len(data)
+    promises[i]:destroy()
+    write_promises[i] = w_handle:write(offset, data)
+    offset = offset + len
+end
+
+aio.wait( write_promises )

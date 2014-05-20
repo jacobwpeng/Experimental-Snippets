@@ -235,12 +235,11 @@ int laio_write(lua_State* L)
 int laio_wait(lua_State* L)
 {
     sigset_t empty;
-    int table_idx = 1;
     int all_done;
     int state_top;
     info_t * info;
 
-    luaL_argcheck(L, lua_istable(L, table_idx), table_idx, "table expect");
+    luaL_argcheck(L, lua_istable(L, 1), 1, "table expect");
 
     sigemptyset(&empty);
     sigprocmask(SIG_BLOCK, &sig_blocked, NULL);
@@ -250,7 +249,7 @@ int laio_wait(lua_State* L)
         assert( state_top == 1 );
         all_done = 1;
         lua_pushnil(L);                         /* first key */
-        while (lua_next(L, table_idx) != 0 )
+        while (lua_next(L, 1) != 0 )
         {
             info = checkinfo(L, -1);
             if (info->done == 0)
@@ -276,49 +275,63 @@ int laio_wait(lua_State* L)
     return 0;
 }
 
-//int laio_waitone(lua_State* L)
-//{
-//    sigset_t empty;
-//    int table_idx = 1;
-//    int all_done;
-//    int state_top;
-//    info_t * info;
-//
-//    luaL_argcheck(L, lua_istable(L, table_idx), table_idx, "table expect");
-//
-//    sigemptyset(&empty);
-//    sigprocmask(SIG_BLOCK, &sig_blocked, NULL);
-//    while (1)
-//    {
-//        state_top = lua_gettop(L);
-//        assert( state_top == 1 );
-//        all_done = 1;
-//        lua_pushnil(L);                         /* first key */
-//        while (lua_next(L, table_idx) != 0 )
-//        {
-//            info = checkinfo(L, -1);
-//            if (info->done == 0)
-//            {
-//                all_done = 0;
-//                /* wait for new aio signal */
-//                sigsuspend(&empty);
-//                if (errno != EINTR) perror("sigsuspend");
-//                /* remove both key and value */
-//                lua_pop(L, 2);
-//                /* and break for next iteration */
-//                break;
-//            }
-//            else
-//            {
-//                lua_pop(L, 1);
-//            }
-//        }
-//
-//        if (all_done) break;
-//    }
-//    sigprocmask(SIG_UNBLOCK, &sig_blocked, NULL);
-//    return 0;
-//}
+int laio_waitone(lua_State* L)
+{
+    int any_done = 0;
+    int empty_table = 1;
+    int first_iteration = 1;
+    sigset_t empty;
+    info_t * info;
+
+    luaL_argcheck(L, lua_istable(L, 1), 1, "table expect");
+
+    sigemptyset(&empty);
+
+    lua_pushnil(L);
+    while (lua_next(L, 1) != 0 )
+    {
+        empty_table = 0;
+        info = checkinfo(L, -1);
+        if (info->done == 1)
+        {
+            any_done = 1;
+            break;
+        }
+        lua_pop(L, 1);
+    }
+
+    if (any_done == 1)
+    {
+        /* remove this pair */
+        return 2;
+    }
+    else if (empty_table == 1) return 0;
+    else
+    {
+        sigprocmask(SIG_BLOCK, &sig_blocked, NULL);
+        do
+        {
+            sigsuspend(&empty);
+            if (errno != EINTR) perror("sigsuspend");
+
+            lua_pushnil(L);
+            while (lua_next(L, 1) != 0)
+            {
+                info = checkinfo(L, -1);
+                if (info->done == 1)
+                {
+                    any_done = 1;
+                    break;
+                }
+                lua_pop(L, 1);                      /* pop the value */
+            }
+        }while (any_done == 0);
+        /* remove this pair */
+        sigprocmask(SIG_UNBLOCK, &sig_blocked, NULL);
+
+        return 2;
+    }
+}
 
 int laio_retrieve(lua_State* L)
 {
@@ -365,9 +378,25 @@ int laio_deleteinfo(lua_State* L)
     return 0;
 }
 
+int pop_front(lua_State * L)
+{
+    luaL_argcheck(L, lua_istable(L, 1), 1, "table expect");
+
+    lua_pushnil(L);
+    if (lua_next(L, 1) != 0 )
+    {
+        lua_pushvalue(L, -2);
+        lua_pushnil(L);
+        lua_rawset(L, 1);
+    }
+    return 2;
+}
+
 static const struct luaL_Reg aiolib_f[] = {
     {"new", laio_newhandle},
     {"wait", laio_wait},
+    {"waitone", laio_waitone},
+    {"pop_front", pop_front},
     {NULL, NULL}
 };
 

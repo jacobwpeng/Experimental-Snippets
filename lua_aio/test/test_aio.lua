@@ -23,7 +23,7 @@ function AddTask(src, dst)
 
             local len = r_handle:len()
             local piece_size = 1024
-            local part = math.floor(len/piece_size)
+            local part = math.ceil(len/piece_size)
             local offset = 0
 
             for i = 1, part do
@@ -33,6 +33,14 @@ function AddTask(src, dst)
             end
         end
     )
+end
+
+function print_table(t)
+    for k,v in pairs(t) do
+        io.write( string.format("%q -> ", k) )
+        print(v)
+    end
+    print(string.rep('*', 80))
 end
 
 -- TODO : add wait_one and dispatcher
@@ -46,12 +54,12 @@ local promises = {}
 local offset = 0
 local size = 1024
 local len = r_handle:len()
-local part = math.floor( len/size )
+local part = math.ceil( len/size )
 
 printf("len = %d, part = %d\n", len, part)
 
 for i = 1, part do
-    promises[i] = r_handle:read(offset, size)
+    promises[tostring(i)] = r_handle:read(offset, size)
     offset = offset + size
 end
 
@@ -62,16 +70,17 @@ end
 
 --if you want results, just wait
 --if all operation in promises are done, then wait return immediately
-aio.wait( promises )
+--local k, v = aio.waitone(promises)
+aio.wait(promises)
 
 local write_promises = {}
 offset = 0
 for i = 1, part do
-    local data = promises[i]:retrieve()
+    local data = promises[tostring(i)]:retrieve()
+    promises[tostring(i)]:destroy()
     local len = string.len(data)
-    promises[i]:destroy()
     write_promises[i] = w_handle:write(offset, data)
     offset = offset + len
 end
 
-aio.wait( write_promises )
+aio.wait(write_promises)

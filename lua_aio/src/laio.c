@@ -12,19 +12,14 @@
 
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
 
-#include <unistd.h>
 #include <errno.h>
 #include <signal.h>
-#include <aio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
-#include <lua.h>
-#include <lauxlib.h>
 
 #include "laio_def.h"
 
@@ -146,6 +141,7 @@ int laio_read(lua_State* L)
     memset(&info->m_aiocb, 0, sizeof(info->m_aiocb) );
     info->ret = 0;
     info->aio_ret = 0;
+    /* TODO : maybe use luaL_Buffer */
     info->buf = malloc(nbytes);
     info->buf_len = nbytes;
     info->handle = handle;
@@ -280,6 +276,50 @@ int laio_wait(lua_State* L)
     return 0;
 }
 
+//int laio_waitone(lua_State* L)
+//{
+//    sigset_t empty;
+//    int table_idx = 1;
+//    int all_done;
+//    int state_top;
+//    info_t * info;
+//
+//    luaL_argcheck(L, lua_istable(L, table_idx), table_idx, "table expect");
+//
+//    sigemptyset(&empty);
+//    sigprocmask(SIG_BLOCK, &sig_blocked, NULL);
+//    while (1)
+//    {
+//        state_top = lua_gettop(L);
+//        assert( state_top == 1 );
+//        all_done = 1;
+//        lua_pushnil(L);                         /* first key */
+//        while (lua_next(L, table_idx) != 0 )
+//        {
+//            info = checkinfo(L, -1);
+//            if (info->done == 0)
+//            {
+//                all_done = 0;
+//                /* wait for new aio signal */
+//                sigsuspend(&empty);
+//                if (errno != EINTR) perror("sigsuspend");
+//                /* remove both key and value */
+//                lua_pop(L, 2);
+//                /* and break for next iteration */
+//                break;
+//            }
+//            else
+//            {
+//                lua_pop(L, 1);
+//            }
+//        }
+//
+//        if (all_done) break;
+//    }
+//    sigprocmask(SIG_UNBLOCK, &sig_blocked, NULL);
+//    return 0;
+//}
+
 int laio_retrieve(lua_State* L)
 {
     int ret;
@@ -292,6 +332,20 @@ int laio_retrieve(lua_State* L)
     assert( info->aio_ret == 0 );
 
     lua_pushlstring(L, info->buf, info->ret);
+    return 1;
+}
+
+int laio_len(lua_State* L)
+{
+    int ret;
+    struct stat sb;
+    handle_t * handle;
+
+    handle = checkhandle(L, 1);
+    ret = fstat(handle->fd, &sb);
+    if (ret != 0 ) perror("fstat");
+
+    lua_pushnumber(L, sb.st_size);
     return 1;
 }
 
@@ -320,6 +374,7 @@ static const struct luaL_Reg aiolib_f[] = {
 static const struct luaL_Reg aiolib_m[] = {
     {"read", laio_read},
     {"write", laio_write},
+    {"len", laio_len},
     {"__gc", laio_deletehandle},
     {NULL, NULL}
 };

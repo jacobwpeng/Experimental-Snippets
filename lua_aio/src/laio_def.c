@@ -9,7 +9,9 @@
  *
  * =====================================================================================
  */
+#include "laio_def.h"
 #include <assert.h>
+#include <stdlib.h>
 
 int first_slot(info_t** infos, int size)
 {

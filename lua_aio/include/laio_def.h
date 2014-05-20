@@ -13,7 +13,12 @@
 #ifndef  __LAIO_DEF__
 #define  __LAIO_DEF__
 
-static const size_t max_info_size = 16;
+#include <lua.h>
+#include <lauxlib.h>
+#include <aio.h>
+#include <unistd.h>
+
+static const unsigned max_info_size = 16;
 
 typedef struct info_s info_t;
 typedef struct handle_s handle_t;

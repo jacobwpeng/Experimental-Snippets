@@ -4,8 +4,8 @@ set(CMAKE_CXX_COMPILER "clang++")
 project(logger)
 
 set(APP "run")
-set(CMAKE_CXX_FLAGS_DEBUG "-ggdb -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-const-variable -std=c++11")
-set(CMAKE_CXX_FLAGS_RELEASE "-ggdb -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-const-variable -O3 -DNDEBUG -std=c++11")
+set(CMAKE_CXX_FLAGS_DEBUG "-pg -ggdb -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-const-variable -std=c++11 -DUSE_SYS_WRITE")
+set(CMAKE_CXX_FLAGS_RELEASE "-ggdb -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-const-variable -O3 -DNDEBUG -std=c++11 -DUSE_SYS_WRITE")
 
 find_package(Boost COMPONENTS thread system chrono)
 include_directories(/opt/include)

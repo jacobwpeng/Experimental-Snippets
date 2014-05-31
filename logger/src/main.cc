@@ -25,7 +25,8 @@
 using namespace std;
 
 static const size_t kMaxLineLen = 4095;
-static const size_t kMaxSlices = 512;
+static const size_t kMaxSlices = 128;
+static const size_t kLogNum = 1000000;
 
 void PrintPointer(const char* name, void * p)
 {
@@ -97,12 +98,16 @@ class Logger
         void Write(const char* buf, int len)
         {
 #ifdef USE_SYS_WRITE
-            boost::lock_guard<boost::mutex> lock(mutex_);
-            slices_.push_back(Slice(buf, len));
-            if (slices_.size() == kMaxSlices)
+            vector<Slice> shadow;
             {
-                FlushBuffers();
+                boost::lock_guard<boost::mutex> lock(mutex_);
+                slices_.push_back(Slice(buf, len));
+                if (slices_.size() == kMaxSlices)
+                {
+                    shadow.swap(slices_);
+                }
             }
+            FlushBuffers(shadow);
 #else
             fwrite(buf, 1, len, fp_);
 #endif
@@ -123,7 +128,7 @@ class Logger
         ~Logger()
         {
 #ifdef USE_SYS_WRITE
-            FlushBuffers();
+            FlushBuffers(slices_);
             close(fd_);
 #else
             fclose(fp_);
@@ -142,28 +147,28 @@ class Logger
 #endif
         }
 
-        void FlushBuffers()
+        void FlushBuffers(const vector<Slice>& slices)
         {
 #ifdef USE_SYS_WRITE
-            for (unsigned i = 0; i != slices_.size(); ++i)
+            if (slices.empty()) return;
+            struct iovec iov[kMaxSlices];
+            for (unsigned i = 0; i != slices.size(); ++i)
             {
-                iov_[i].iov_base = (void*)slices_[i].buf;
-                iov_[i].iov_len = slices_[i].len;
+                iov[i].iov_base = (void*)slices[i].buf;
+                iov[i].iov_len = slices[i].len;
             }
-            if (writev(fd_, iov_, slices_.size()) < 0)
+            if (writev(fd_, iov, slices.size()) < 0)
             {
                 perror("writev");
             }
-            for (unsigned i = 0; i != slices_.size(); ++i)
-                delete [] slices_[i].buf;
-            slices_.clear();
+            for (unsigned i = 0; i != slices.size(); ++i)
+                delete [] slices[i].buf;
 #endif
         }
 
     private:
         static const char* logfilename_;
 #ifdef USE_SYS_WRITE
-        struct iovec iov_[kMaxSlices];
         std::vector<Slice> slices_;
         boost::mutex mutex_;
         int fd_;
@@ -199,7 +204,6 @@ class LoggerRecorder
             len += 1;
             LoggerInst->Write(buf, len);
 #ifdef USE_SYS_WRITE
-            delete [] buf;
 #endif
         }
 
@@ -238,7 +242,7 @@ class LoggerRecorder
 
 void ThreadRoutine()
 {
-    for (int i = 0; i != 1000000; ++i)
+    for (int i = 0; i != kLogNum; ++i)
     {
         LOG_DEBUG << "this just makes a long sentence, no one wants to see this msg, real part is thread id = " << boost::this_thread::get_id() << ", i = " << i;
     }

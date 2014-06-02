@@ -19,7 +19,7 @@ int LogStreambuf::used()
 
 int LogStreambuf::overflow(int c)
 {
-    return epptr() == pptr() ? tmp_ : *pptr();
+    return epptr() == pptr() ? tmp_ : c;
 }
 
 std::streambuf* LogStreambuf::setbuf (char* s, std::streamsize n)

@@ -51,19 +51,15 @@ void ThreadRoutine()
 int main(int argc, char* argv[])
 {
     if (argc != 2) return -1;
-    //Logger::Init(argv[1]);
-    //
+
     file = new LogFile(argv[1], kRotateSize, true);
     SyncLoggingInst->Init(true);
     SyncLoggingInst->SetOutput(Output);
 
     boost::thread_group threads;
-
     uint64_t start = GetTimestamp();
-    for (int i = 0; i != kThreadNum; ++i)
-    {
-        threads.create_thread(ThreadRoutine);
-    }
+
+    for (int i = 0; i != kThreadNum; ++i) threads.create_thread(ThreadRoutine);
 
     threads.join_all();
     SyncLoggingInst->Flush();

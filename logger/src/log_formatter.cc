@@ -24,7 +24,7 @@ static __thread char time_fmt[256];
 LogFormatter::LogFormatter(const char* basename, int lineno)
 {
     header_len_ = FormatHeader(basename, lineno);
-    stream_.rdbuf()->pubsetbuf(buf+header_len_, LogFormatter::kMaxLogLength-header_len_);
+    stream_.rdbuf()->pubsetbuf(buf+header_len_, LogFormatter::kMaxLogLength-header_len_-1);
 }
 
 LogFormatter::~LogFormatter()

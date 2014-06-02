@@ -12,10 +12,11 @@ include_directories(/opt/include)
 include_directories(include)
 list(APPEND srcs src/main.cc 
                  src/log_file.cc 
-                 src/sync_logging.cc 
                  src/log_streambuf.cc
                  src/log_stream.cc
                  src/log_formatter.cc
+                 src/sync_logger.cc 
+                 src/async_logger.cc
      )
 
 add_executable(${APP} ${srcs})

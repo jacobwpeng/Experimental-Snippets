@@ -16,8 +16,8 @@
 #include <boost/thread/thread.hpp>
 #include <boost/pool/pool.hpp>
 
+#include "logger.hpp"
 #include "log_file.h"
-#include "sync_logging.h"
 
 static LogFile * file = NULL;
 static const size_t kLogNum = 1000000;
@@ -44,7 +44,7 @@ void ThreadRoutine()
 {
     for (int i = 0; i != kLogNum; ++i)
     {
-        LOG_DEBUG << "this just makes a long sentence, no one wants to see this msg, real part is thread id = " << boost::this_thread::get_id() << ", i = " << i;
+        LOG_ERROR << "Vim provides many ways of moving around within a document as well as commands for jumping between buffers.";
     }
 }
 
@@ -52,9 +52,13 @@ int main(int argc, char* argv[])
 {
     if (argc != 2) return -1;
 
+#ifndef USE_SYNC_LOGGER
+    file = new LogFile(argv[1], kRotateSize, false);
+#else
     file = new LogFile(argv[1], kRotateSize, true);
-    SyncLoggingInst->Init(true);
-    SyncLoggingInst->SetOutput(Output);
+#endif
+    LoggerInst->Init(true);
+    LoggerInst->SetOutput(Output);
 
     boost::thread_group threads;
     uint64_t start = GetTimestamp();
@@ -62,7 +66,7 @@ int main(int argc, char* argv[])
     for (int i = 0; i != kThreadNum; ++i) threads.create_thread(ThreadRoutine);
 
     threads.join_all();
-    SyncLoggingInst->Flush();
+    LoggerInst->Flush(true);
     uint64_t end = GetTimestamp();
     uint64_t delta = end - start;
     const double time_seconds = static_cast<double>(delta) / 1000000;

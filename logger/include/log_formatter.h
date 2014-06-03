@@ -42,12 +42,12 @@ struct BasenameRetriever
 class LogFormatter
 {
     public:
-        LogFormatter(const char* basename, int lineno, const char* level);
+        LogFormatter(const char* basename, const char* funcname, int lineno, const char* level);
         ~LogFormatter();
         std::ostream& stream() { return stream_; }
 
     private:
-        size_t FormatHeader(const char* basename, int lineno, const char* level);
+        size_t FormatHeader(const char* basename, const char* funcname, int lineno, const char* level);
 
     private:
         static const size_t kMaxLogLength = 1 << 12;

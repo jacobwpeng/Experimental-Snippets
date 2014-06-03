@@ -33,12 +33,11 @@ template<typename Impl>
 class Logger : boost::noncopyable
 {
     private:
-        struct Dummy : std::ostream
+        // inspired by glog
+        struct Voidify
         {
-            template<typename T>
-            Dummy* operator<< (T t)
+            void operator&(std::ostream&)
             {
-                return this;
             }
         };
 
@@ -66,8 +65,8 @@ class Logger : boost::noncopyable
 
         void SetLogLevel(LogLevel level) { level_ = level; }
         LogLevel Level() const { return level_; }
-        Dummy& GetDummy() const { return *dummy_; }
 
+    static Voidify dummy;
     private:
         Logger()
             :level_(kLogDebug)
@@ -78,7 +77,6 @@ class Logger : boost::noncopyable
         static Logger* instance_;
         LogLevel level_;
         Impl impl_;
-        boost::scoped_ptr<Dummy> dummy_;
 };
 
 template<typename Impl>
@@ -114,9 +112,10 @@ void Logger<Impl>::Init(bool thread_safe)
 #endif
 
 #define LoggerInst LoggerType::Instance()
-#define LOG_IF(level) ( LoggerInst->Level() >= level \
-                          ? (LogFormatter(BasenameRetriever(__FILE__).basename, __LINE__, LoggerType::LogLevelNames[level]).stream())\
-                          : LoggerInst->GetDummy())
+// inspired by glog
+#define LOG_IF(level) \
+    ( LoggerInst->Level() < level) ? (void)0 : \
+    LoggerType::dummy & (LogFormatter(BasenameRetriever(__FILE__).basename, __FUNCTION__, __LINE__, LoggerType::LogLevelNames[level]).stream())
 #define LOG_DEBUG LOG_IF(kLogDebug)
 #define LOG_INFO LOG_IF(kLogInfo)
 #define LOG_WARNING LOG_IF(kLogWarning)

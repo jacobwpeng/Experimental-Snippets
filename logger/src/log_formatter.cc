@@ -22,9 +22,9 @@ static __thread time_t lasttime = 0;
 static __thread char time_fmt[256];
 static __thread pid_t tid = 0;
 
-LogFormatter::LogFormatter(const char* basename, int lineno, const char* level)
+LogFormatter::LogFormatter(const char* basename, const char* funcname, int lineno, const char* level)
 {
-    header_len_ = FormatHeader(basename, lineno, level);
+    header_len_ = FormatHeader(basename, funcname, lineno, level);
     stream_.rdbuf()->pubsetbuf(buf+header_len_, LogFormatter::kMaxLogLength-header_len_-1);
 }
 
@@ -36,7 +36,7 @@ LogFormatter::~LogFormatter()
     LoggerInst->Write(buf, len);
 }
 
-size_t LogFormatter::FormatHeader(const char* basename, int lineno, const char* level)
+size_t LogFormatter::FormatHeader(const char* basename, const char* funcname, int lineno, const char* level)
 {
     struct timeval tv;
     int ret = gettimeofday(&tv, NULL);
@@ -51,8 +51,8 @@ size_t LogFormatter::FormatHeader(const char* basename, int lineno, const char* 
         lasttime = tv.tv_sec;
         if (NULL != localtime_r(&tv.tv_sec, &tm))
         {
-            strftime(time_fmt, sizeof time_fmt, "[%Y-%m-%d %H:%M:%S.%%06u %%s:%%d %%5.d][%%s] ", &tm);
+            strftime(time_fmt, sizeof time_fmt, "[%Y-%m-%d %H:%M:%S.%%06u %%s:%%d %%s %%5.d][%%s] ", &tm);
         }
     }
-    return snprintf(buf, LogFormatter::kMaxLogLength, time_fmt, tv.tv_usec, basename, lineno, tid, level);
+    return snprintf(buf, LogFormatter::kMaxLogLength, time_fmt, tv.tv_usec, basename, lineno, funcname, tid, level);
 }

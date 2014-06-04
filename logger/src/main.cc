@@ -18,8 +18,10 @@
 
 #include "logger.hpp"
 #include "log_file.h"
+#include "log_mmap_file.h"
 
-static LogFile * file = NULL;
+typedef LogFile LogFileType ;
+static LogFileType * file = NULL;
 static const size_t kLogNum = 1000000;
 static const size_t kThreadNum = 4;
 static const size_t kRotateSize = 100 * 1 << 20; /* 100 MiB */
@@ -38,13 +40,16 @@ void Output(const char* buf, size_t len)
 {
     gTotalBytes += len;
     file->Append(buf, len);
+    //fwrite(buf, 1, len, stderr);
 }
 
 void ThreadRoutine()
 {
+    std::string msg("Vim provides many ways of moving around within a document as well as commands for jumping between buffers.");
     for (int i = 0; i != kLogNum; ++i)
     {
-        LOG_ERROR << "Vim provides many ways of moving around within a document as well as commands for jumping between buffers.";
+    //    Output(msg.data(), msg.size());
+        LOG_ERROR << msg;
     }
 }
 
@@ -53,18 +58,17 @@ int main(int argc, char* argv[])
     if (argc != 2) return -1;
 
 #ifndef USE_SYNC_LOGGER
-    file = new LogFile(argv[1], kRotateSize, false);
+    file = new LogFileType(argv[1], kRotateSize, false);
 #else
-    file = new LogFile(argv[1], kRotateSize, true);
+    file = new LogFileType(argv[1], kRotateSize, true);
 #endif
     LoggerInst->Init(true);
     LoggerInst->SetOutput(Output);
 
-    boost::thread_group threads;
     uint64_t start = GetTimestamp();
-
+    //ThreadRoutine();
+    boost::thread_group threads;
     for (int i = 0; i != kThreadNum; ++i) threads.create_thread(ThreadRoutine);
-
     threads.join_all();
     LoggerInst->Flush(true);
     uint64_t end = GetTimestamp();

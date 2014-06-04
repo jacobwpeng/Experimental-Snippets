@@ -78,6 +78,8 @@ class Logger : boost::noncopyable
         LogLevel level_;
         Impl impl_;
 };
+template<typename Impl>
+typename Logger<Impl>::Voidify Logger<Impl>::dummy;
 
 template<typename Impl>
 Logger<Impl>* Logger<Impl>::instance_ = NULL;

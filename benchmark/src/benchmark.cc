@@ -23,13 +23,14 @@ namespace detail
     bool needs_header = true;
     void GenerateRange(int min, int max, std::vector<int>* range)
     {
+        if (min == 0) min = 1;
         assert (min <= max);
         assert (range);
         for (int i = min; i < max; i *= 2)
         {
             range->push_back(i);
         }
-        range->push_back(max);
+        if (min != max) range->push_back(max);
     }
 
     uint64_t GetTimestamp()
@@ -45,7 +46,7 @@ namespace detail
         if (needs_header)
         {
             std::cout << std::string(max_name_length + 1, ' ');
-            printf("           x               y       iteration                 speed   (iteration/s)\n");
+            printf("           x               y       iteration(100us)          speed   (iteration/s)\n");
             needs_header = false;
         }
         if (name.size() >= max_name_length)
@@ -62,6 +63,9 @@ namespace detail
     }
 }
 
+namespace benchmark
+{
+
 /*-----------------------------------------------------------------------------
  *  BenchmarkState
  *-----------------------------------------------------------------------------*/
@@ -75,7 +79,7 @@ BenchmarkState::BenchmarkState(int max_x, int max_y)
  *  BenchmarkSuite
  *-----------------------------------------------------------------------------*/
 BenchmarkSuite::BenchmarkSuite(const std::string& name, int min_x, int max_x, int min_y, int max_y, 
-        BenchmarkFunc bench, BenchmarkFunc setup, BenchmarkFunc teardown)
+        const BenchmarkFunc& bench, const BenchmarkFunc& setup, const BenchmarkFunc& teardown)
     :name(name), bench(bench), setup(setup), teardown(teardown)
 {
     detail::GenerateRange(min_x, max_x, &xs);
@@ -137,3 +141,20 @@ void BenchmarkMonitor::Execute()
         suites_[i].Execute();
     }
 }
+
+/*-----------------------------------------------------------------------------
+ *  global functions
+ *-----------------------------------------------------------------------------*/
+
+void AddBench(const std::string& name, int min_x, int max_x, int min_y, int max_y, 
+        const BenchmarkFunc& bench, const BenchmarkFunc& setup, const BenchmarkFunc& teardown)
+{
+    BenchmarkMonitor::Instance()->Add(BenchmarkSuite(name, min_x, max_x, min_y, max_y, bench, setup, teardown));
+}
+
+void ExecuteAll()
+{
+    BenchmarkMonitor::Instance()->Execute();
+}
+
+} /* namespace benchmakr */

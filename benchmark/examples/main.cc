@@ -30,7 +30,7 @@ static int fd;
 static const char* filename = "/tmp/test.benchmark";
 const size_t kMaxBufferLength = 1 << 12;
 
-void TestWrite(BenchmarkState& state)
+void TestWrite(benchmark::BenchmarkState& state)
 {
     for (int y = 0; y < state.max_y; ++y)
     {
@@ -38,7 +38,7 @@ void TestWrite(BenchmarkState& state)
     }
 }
 
-void TestWritev(BenchmarkState& state)
+void TestWritev(benchmark::BenchmarkState& state)
 {
     struct iovec * iov;
     iov = (iovec*) alloca(state.max_y * sizeof (struct iovec) );
@@ -58,8 +58,8 @@ int main()
     assert (fd >= 0);
 
     /* x -> buffer length, y -> iov length */
-    AddBench("TestWrite", 50, kMaxBufferLength, 1, IOV_MAX, TestWrite, NULL, NULL);
-    AddBench("TestWritev", 50, kMaxBufferLength, 1, IOV_MAX, TestWritev, NULL, NULL);
-    ExecuteAll();
+    benchmark::AddBench("TestWrite", 50, kMaxBufferLength, 1, IOV_MAX, TestWrite, NULL, NULL);
+    benchmark::AddBench("TestWritev", 50, kMaxBufferLength, 1, IOV_MAX, TestWritev, NULL, NULL);
+    benchmark::ExecuteAll();
     close(fd);
 }

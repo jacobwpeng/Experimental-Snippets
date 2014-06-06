@@ -18,50 +18,55 @@
 #include <boost/noncopyable.hpp>
 #include <boost/function.hpp>
 
-struct BenchmarkState : boost::noncopyable
+namespace benchmark
 {
-    BenchmarkState(int max_x, int max_y);
-    const int max_x;
-    const int max_y;
 
-    uint64_t duration;
-    void * data;
-};
+    struct BenchmarkState : boost::noncopyable
+    {
+        BenchmarkState(int max_x, int max_y);
+        const int max_x;
+        const int max_y;
 
-typedef boost::function<void(BenchmarkState&)> BenchmarkFunc;
+        uint64_t duration;
+        void * data;
+    };
 
-struct BenchmarkSuite
-{
-    BenchmarkSuite(const std::string& name, int min_x, int max_x, int min_y, int max_y, BenchmarkFunc, BenchmarkFunc, BenchmarkFunc);
-    void Execute();
+    typedef boost::function<void(BenchmarkState&)> BenchmarkFunc;
 
-    std::string name;
-    std::vector<int> xs;
-    std::vector<int> ys;
-    BenchmarkFunc bench;
-    BenchmarkFunc setup;
-    BenchmarkFunc teardown;
-};
-
-class BenchmarkMonitor : boost::noncopyable
-{
-    public:
-        static BenchmarkMonitor* Instance();
-
-        ~BenchmarkMonitor();
-        void Add(const BenchmarkSuite& );
+    struct BenchmarkSuite
+    {
+        BenchmarkSuite(const std::string& name, int min_x, int max_x, int min_y, int max_y, 
+                const BenchmarkFunc&, const BenchmarkFunc& , const BenchmarkFunc& );
         void Execute();
 
-    private:
-        BenchmarkMonitor();
+        std::string name;
+        std::vector<int> xs;
+        std::vector<int> ys;
+        BenchmarkFunc bench;
+        BenchmarkFunc setup;
+        BenchmarkFunc teardown;
+    };
 
-    private:
-        std::vector<BenchmarkSuite> suites_;
-};
+    class BenchmarkMonitor : boost::noncopyable
+    {
+        public:
+            static BenchmarkMonitor* Instance();
 
-#define BenchmarkMonitorInst BenchmarkMonitor::Instance()
-#define AddBench(name, min_x, max_x, min_y, max_y, bench, setup, teardown)\
-    BenchmarkMonitorInst->Add(BenchmarkSuite(name, min_x, max_x, min_y, max_y, bench, setup, teardown))
-#define ExecuteAll() BenchmarkMonitorInst->Execute()
+            ~BenchmarkMonitor();
+            void Add(const BenchmarkSuite& );
+            void Execute();
+
+        private:
+            BenchmarkMonitor();
+
+        private:
+            std::vector<BenchmarkSuite> suites_;
+    };
+
+    void AddBench(const std::string& name, int min_x, int max_x, int min_y, int max_y, 
+            const BenchmarkFunc&, const BenchmarkFunc&, const BenchmarkFunc& );
+
+    void ExecuteAll();
+}
 
 #endif   /* ----- #ifndef __BENCHMARK_H__  ----- */

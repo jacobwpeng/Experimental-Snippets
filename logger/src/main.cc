@@ -28,6 +28,12 @@ static const size_t kRotateSize = 100 * 1 << 20; /* 100 MiB */
 
 static size_t gTotalBytes = 0;
 
+struct ProcessInfo
+{
+    pid_t pid;
+    char name[256];
+};
+
 uint64_t GetTimestamp()
 {
     struct timeval tv;
@@ -43,6 +49,37 @@ void Output(const char* buf, size_t len)
     //fwrite(buf, 1, len, stderr);
 }
 
+ProcessInfo GetProcessInfo(pid_t pid)
+{
+    char fmt[64];
+    snprintf(fmt, sizeof fmt, "/proc/%d/stat", pid);
+
+    FILE * fp = fopen(fmt, "r");
+    assert (fp);
+
+    ProcessInfo info;
+    int ret = fscanf(fp, "%d (%256s)", &info.pid, &info.name[0]);
+    assert (ret == 2);
+    (void)ret;
+
+    /* remove right parentheses */
+    unsigned i;
+    for (i = 0; i != sizeof info.name; ++i)
+    {
+        if (info.name[i] == ')')
+        {
+            info.name[i] = '\0';
+        }
+    }
+    if (i == sizeof info.name)
+    {
+        info.name[i-1] = '\0';
+    }
+
+    fclose(fp);
+    return info;
+}
+
 void ThreadRoutine()
 {
     std::string msg("Vim provides many ways of moving around within a document as well as commands for jumping between buffers.");
@@ -56,20 +93,21 @@ void ThreadRoutine()
 int main(int argc, char* argv[])
 {
     if (argc != 2) return -1;
+    //ProcessInfo info = GetProcessInfo(getpid());
 
 #ifndef USE_SYNC_LOGGER
-    file = new LogFileType(argv[1], kRotateSize, false);
+    file = new LogFileType(argv[1], "", kRotateSize, false);
 #else
-    file = new LogFileType(argv[1], kRotateSize, true);
+    file = new LogFileType(argv[1], "", kRotateSize, true);
 #endif
     LoggerInst->Init(true);
     LoggerInst->SetOutput(Output);
 
     uint64_t start = GetTimestamp();
-    //ThreadRoutine();
-    boost::thread_group threads;
-    for (int i = 0; i != kThreadNum; ++i) threads.create_thread(ThreadRoutine);
-    threads.join_all();
+    ThreadRoutine();
+    //boost::thread_group threads;
+    //for (int i = 0; i != kThreadNum; ++i) threads.create_thread(ThreadRoutine);
+    //threads.join_all();
     LoggerInst->Flush(true);
     uint64_t end = GetTimestamp();
     uint64_t delta = end - start;

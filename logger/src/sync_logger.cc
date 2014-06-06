@@ -16,7 +16,7 @@
 #include <cstdio>
 
 SyncLogger::SyncLogger()
-    :used_(0)
+//    :used_(0)
 {
 }
 
@@ -63,21 +63,22 @@ void SyncLogger::NonLockWrite(const char* buf, size_t len)
 {
     if (len > kMaxLogLength) return;            /* drop long log */
 
-    if (used_ + len > SyncLogger::kBufferLength)
-    {
-        NonLockFlush();
-        assert (used_ == 0);
-    }
-    assert (used_ + len <= SyncLogger::kBufferLength);
-    memcpy(buf_ + used_, buf, len);
-    used_ += len;
+    //if (used_ + len > SyncLogger::kBufferLength)
+    //{
+    //    NonLockFlush();
+    //    assert (used_ == 0);
+    //}
+    //assert (used_ + len <= SyncLogger::kBufferLength);
+    //memcpy(buf_ + used_, buf, len);
+    //used_ += len;
+    output_(buf, len);
 }
 
 void SyncLogger::NonLockFlush()
 {
-    if (output_)
-    {
-        output_(buf_, used_);
-    }
-    used_ = 0u;
+    //if (output_)
+    //{
+    //    output_(buf_, used_);
+    //}
+    //used_ = 0u;
 }

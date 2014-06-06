@@ -14,10 +14,11 @@
 
 #include <cstdio>
 
-LogFile::LogFile(const std::string& logname, size_t rotate_size, bool thread_safe)
-    :fp_(NULL), logname_(logname), rotate_size_(rotate_size), bytes_written_(0),
+LogFile::LogFile(const std::string& prefix, const std::string& suffix, size_t rotate_size, bool thread_safe)
+    :fp_(NULL), name_prefix_(prefix), name_suffix_(suffix), rotate_size_(rotate_size), bytes_written_(0),
     mutex_(thread_safe ? new boost::mutex() : NULL)
 {
+    assert (not prefix.empty());
     std::string filename = MakeFilename();
     fp_ = fopen(filename.c_str(), "as");
     assert (fp_ != NULL);
@@ -49,6 +50,7 @@ void LogFile::NonLockAppend(const char* buf, size_t len)
 {
     size_t bytes = fwrite(buf, 1, len, fp_);
     bytes_written_ += bytes;
+    assert (bytes == len);
     Flush();
 
     if (bytes_written_ > rotate_size_)
@@ -73,6 +75,7 @@ std::string LogFile::MakeFilename()
     memset(buf, 0, sizeof(buf));
     memset(fmt, 0, sizeof(fmt));
 
+    std::string res(name_prefix_);
     int ret = gettimeofday(&tv, NULL);
     if (ret < 0)
     {
@@ -82,13 +85,17 @@ std::string LogFile::MakeFilename()
     {
         strftime(fmt, sizeof fmt, ".%Y%m%d%H%M%S%%06u", &tm);
         snprintf(buf, sizeof buf, fmt, tv.tv_usec);
-        return logname_ + buf;
+        res += buf;
+        if (not name_suffix_.empty())
+        {
+            res += "." + name_suffix_;
+        }
     }
     else
     {
         perror("localtime_r");
     }
-    return logname_;
+    return res;
 }
 
 void LogFile::RotateFile()

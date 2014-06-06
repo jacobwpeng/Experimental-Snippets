@@ -20,7 +20,7 @@
 class LogFile
 {
     public:
-        LogFile(const std::string& logname, size_t rotate_size, bool thread_safe);
+        LogFile(const std::string& prefix, const std::string& suffix, size_t rotate_size, bool thread_safe);
         ~LogFile();
 
         void Append(const char* buf, size_t len);
@@ -33,7 +33,8 @@ class LogFile
 
     private:
         FILE * fp_;
-        const std::string logname_;
+        const std::string name_prefix_;
+        const std::string name_suffix_;
         const size_t rotate_size_;
         size_t bytes_written_;
         boost::scoped_ptr<boost::mutex> mutex_;

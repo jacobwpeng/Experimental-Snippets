@@ -41,8 +41,8 @@ class SyncLogger : boost::noncopyable
         static const size_t kMaxLogLength = 1 << 12;
         boost::scoped_ptr<boost::mutex> mutex_;
         OutputFunc output_;
-        char buf_[SyncLogger::kBufferLength];
-        size_t used_;
+        //char buf_[SyncLogger::kBufferLength];
+        //size_t used_;
 };
 
 #endif   /* ----- #ifndef __SYNC_LOGGER_H__  ----- */

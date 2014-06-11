@@ -1,0 +1,22 @@
+message Userinfo
+{
+    required int32 i32 = 1;
+    required int64 i64 = 2;
+    required sint32 si32 = 3;
+    required sint64 si64 = 4;
+    required sfixed32 sf32 = 5;
+    required sfixed64 sf64 = 6;
+    required uint32 u32 = 7;
+    required uint64 u64 = 8;
+    required double d = 9;
+    required string s = 10;
+    required string s1 = 11;
+    required string s2 = 12;
+    required string s3 = 13;
+    required string s4 = 14;
+    required string s5 = 15;
+    required string s6 = 16;
+    required string s7 = 17;
+    required string s8 = 18;
+    required string s9 = 19;
+}

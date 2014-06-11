@@ -1,5 +1,5 @@
 <root>
     <bus id="9999" size="1048576000" path="/home/work/repos/test/logsvrd/data/" desc="logsvrd" />
     <log path="/home/work/repos/test/logsvrd/logs/" />
-    <logsvrd workers="0" />
+    <logsvrd workers="4" />
 </root>

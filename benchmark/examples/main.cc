@@ -21,9 +21,11 @@
 #include <vector>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include <boost/scoped_ptr.hpp>
 
 #include "userinfo.pb.h"
+#include "log_stream.h"
 
 using namespace std;
 
@@ -37,6 +39,9 @@ int64_t sf64 = 6;
 unsigned u32 = 7;
 uint64_t u64 = 8;
 double d = 3.14159;
+
+const char * LogMessage = "The usleep() function suspends execution of the calling thread for (at least) usec microseconds.  "
+"The sleep may be lengthened slightly by any system activity or by the time spent processing the call or by the granularity of system timers.";
 
 struct User
 {
@@ -59,6 +64,16 @@ struct User
     char buf7[1024];
     char buf8[1024];
     char buf9[1024];
+};
+
+struct Base
+{
+    virtual void Func(){}
+};
+
+struct Derived : Base
+{
+    virtual void Func(){}
 };
 
 void TestStruct(benchmark::BenchmarkState& state)
@@ -109,10 +124,58 @@ void TestProtobuf(benchmark::BenchmarkState& state)
     }
 }
 
+void TestOstringstream(benchmark::BenchmarkState& state)
+{
+    ostringstream oss;
+    for (int x = 0; x < state.max_x; ++x)
+    {
+        oss << LogMessage;
+        oss.str("");
+    }
+}
+
+void TestStreambuf(benchmark::BenchmarkState& state)
+{
+    char buf[4096];
+    LogStream logstream;
+    for (int x = 0; x < state.max_x; ++x)
+    {
+        logstream.rdbuf()->pubsetbuf(buf, sizeof(buf));
+        logstream << LogMessage;
+        (void)dynamic_cast<LogStreambuf*>(logstream.rdbuf());
+    }
+}
+
+void TestBaseVirtualCall(benchmark::BenchmarkState& state)
+{
+    Base * inst = new Derived;
+    for (int x = 0; x < state.max_x; ++x) inst->Func();
+}
+
+void TestChildVirtualCall(benchmark::BenchmarkState& state)
+{
+    Derived * inst = new Derived;
+    for (int x = 0; x < state.max_x; ++x) inst->Func();
+}
+
+void TestDirectCall(benchmark::BenchmarkState& state)
+{
+    Derived inst;
+    for (int x = 0; x < state.max_x; ++x) inst.Func();
+}
+
+#define AddBench(name) benchmark::AddBench(#name, 50, 1<<22, 0, 0, name, NULL, NULL)
+
 int main()
 {
-    benchmark::AddBench("TestStruct", 50, 1 << 22, 0, 0, TestStruct, NULL, NULL);
-    benchmark::AddBench("TestProtobuf", 50, 1 << 22, 0, 0, TestProtobuf, NULL, NULL);
+    AddBench(TestDirectCall);
+    AddBench(TestBaseVirtualCall);
+    AddBench(TestChildVirtualCall);
+    //benchmark::AddBench("TestVirtualCall", 50, 1 << 20, 0, 0, TestVirtualCall, NULL, NULL);
+    //benchmark::AddBench("TestOstringstream", 50, 1 << 20, 0, 0, TestOstringstream, NULL, NULL);
+    //benchmark::AddBench("TestLogStream", 50, 1 << 20, 0, 0, TestStreambuf, NULL, NULL);
+    //benchmark::AddBench("TestStruct", 50, 1 << 22, 0, 0, TestStruct, NULL, NULL);
+    //benchmark::AddBench("TestProtobuf", 50, 1 << 22, 0, 0, TestProtobuf, NULL, NULL);
     //benchmark::AddBench("TestLengthDelimitedString", 50, 1 << 22, 0, 0, TestLengthDelimitedString, NULL, NULL);
     benchmark::ExecuteAll();
 }

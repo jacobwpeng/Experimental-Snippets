@@ -26,13 +26,7 @@ namespace CompactProtobuf
             kInvalidWireType = 3,
             kNeedsMore = 4,
         };
-        enum WireType
-        {
-            kVarint = 0,
-            k64Bits = 1,
-            kLengthDelimited = 2,
-            k32Bits = 5
-        };
+
         struct ParserState
         {
             Slice slice;
@@ -49,6 +43,7 @@ namespace CompactProtobuf
         uint64_t Value(Byte byte);              /* return uint64_t for bit operation */
 
         ParserStatus ParseTag(ParserState* state);
+        ParserStatus ParseVarintInternal(ParserState* state, unsigned* plen);
         ParserStatus ParseVarint(ParserState* state);
         ParserStatus ParseVarintLazy(ParserState* state);
         ParserStatus ParseLengthDelimited(ParserState * state);

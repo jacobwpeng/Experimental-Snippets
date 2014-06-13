@@ -14,190 +14,14 @@
 #include <cstdio>
 #include <cassert>
 #include <vector>
+#include <boost/bind.hpp>
 #include "compact_protobuf.h"
 
-//typedef uint8_t Byte;
-//struct Slice
-//{
-//    Byte buf[1 << 20];
-//    size_t len;
-//};
-//
-//Slice slice;
-//
-//enum ParserStatus
-//{
-//    kOk = 1,
-//    kUnknownError = 2,
-//    kInvalidWireType = 3,
-//};
-//
-//enum WireType
-//{
-//    kVarint = 0,
-//    k64Bits = 1,
-//    kLengthDelimited = 2,
-//    k32Bits = 5
-//};
-//
-//enum FieldType
-//{
-//    kTypeInt32 = 0,
-//    kTypeInt64 = 1,
-//    kTypeUInt32 = 2,
-//    kTypeUInt64 = 3,
-//    kTypeSInt32 = 4,
-//    kTypeSInt64 = 5,
-//    kTypeBool = 6,
-//    kTypeEnum = 7,
-//
-//    kTypeFixed64 = 10,
-//    kTypeSFixed64 = 11,
-//    kTypeDouble = 12,
-//
-//    kTypeString = 20,
-//    kTypeBytes = 21,
-//    kTypeMessage = 22,
-//    kTypePackedRepeated = 23,
-//
-//    kTypeFixed32 = 50,
-//    kTypeSFixed32 = 51,
-//    kTypeFloat = 52,
-//};
-//
-//union Double64Bits
-//{
-//    uint64_t u;
-//    double d;
-//};
-//
-//union Float32Bits
-//{
-//    uint32_t u;
-//    float f;
-//};
-//
-//union Value
-//{
-//    uint64_t varint;
-//    struct { Byte * start; Byte * end; } ld; /* length delimited */
-//    Double64Bits d;
-//    Float32Bits f;
-//};
-//
-//struct ParserState
-//{
-//    Byte * start;                               /* buf start */
-//    Byte * end;                                 /* buf end */
-//    size_t pos;                                 /* current pos */
-//    uint32_t field_id;
-//    FieldType field_type;
-//    WireType wire_type;
-//    Value value;
-//};
-////std::vector<Value> values;
-//
-//const char * wire_type_to_string(WireType t)
-//{
-//    switch(t)
-//    {
-//        case kVarint:
-//            return "varint";
-//        case k64Bits:
-//            return "64-bit";
-//        case kLengthDelimited:
-//            return "Length-delimited";
-//        case k32Bits:
-//            return "32-bit";
-//        default:
-//            return "unknown";
-//    }
-//}
-//
-//uint64_t get_field_id(uint64_t byte)
-//{
-//    return byte >> 3;
-//}
-//
-//WireType get_wire_type(uint64_t byte)
-//{
-//    return static_cast<WireType>(byte & 0x7);
-//}
-//
-//bool more(Byte byte)
-//{
-//    return byte & 0x80;
-//}
-//
-//uint64_t value(Byte byte)
-//{
-//    return byte & 0x7f;
-//}
-//
-//ParserStatus ParseTag(ParserState* state);
-//ParserStatus ParseVarint(ParserState* state);
-//ParserStatus ParseLengthDelimited(ParserState * state);
-//ParserStatus Parse64Bits(ParserState * state);
-//ParserStatus Parse32Bits(ParserState * state);
-//
-//ParserStatus ParseTag(ParserState* state)
-//{
-//    ParserStatus status = ParseVarint(state);
-//    if (status != kOk) return status;
-//    uint64_t tag = state->value.varint;
-//    state->field_id = get_field_id(tag);
-//    state->wire_type = get_wire_type(tag);
-//
-//    if (state->wire_type != 0 and state->wire_type != 1 and state->wire_type != 2 and state->wire_type != 5) return kInvalidWireType;
-//    return kOk;
-//}
-//
-//ParserStatus ParseVarint(ParserState* state)
-//{
-//    Byte * cur = state->start + state->pos;
-//    const unsigned kMaxVarintLength = 10u;        /* for maximum (u)int64 */
-//    unsigned len = 1;
-//    uint64_t val = 0;
-//    while (cur < state->end and len < kMaxVarintLength)
-//    {
-//        uint64_t part = value(*cur);
-//        part <<= ((len-1) * 7);
-//        val |= part;
-//        if (not more(*cur)) break;
-//        ++cur;
-//        ++len;
-//    }
-//    state->pos += len;
-//    state->value.varint = val;
-//    return kOk;
-//}
-//
-//ParserStatus ParseLengthDelimited(ParserState * state)
-//{
-//    ParserStatus status = ParseVarint(state);
-//    if (status != kOk) return status;
-//
-//    uint64_t len = state->value.varint;
-//    assert (state->start + state->pos + len <= state->end);
-//    state->value.ld.start = state->start + state->pos;
-//    state->value.ld.end = state->start + state->pos + len;
-//    state->pos += len;
-//    return kOk;
-//}
-//
-//ParserStatus Parse64Bits(ParserState * state)
-//{
-//    state->value.d.u = *((uint64_t*)(state->start + state->pos));
-//    state->pos += 8;
-//    return kOk;
-//}
-//
-//ParserStatus Parse32Bits(ParserState * state)
-//{
-//    state->value.f.u = *((uint32_t*)(state->start + state->pos));
-//    state->pos += 4;
-//    return kOk;
-//}
+#include "benchmark.h"
+#include "userinfo.pb.h"
+
+using namespace std;
+using namespace petlib;
 
 bool ReadFile(const char* filename, CompactProtobuf::Slice* slice)
 {
@@ -215,6 +39,59 @@ bool ReadFile(const char* filename, CompactProtobuf::Slice* slice)
     return true;
 }
 
+void WriteFile(const char* filename, const std::string& output)
+{
+    FILE * fp = fopen(filename, "wb");
+    if (fp == NULL) return;
+
+    fwrite(output.data(), 1, output.size(), fp);
+    fclose(fp);
+    return ;
+}
+
+const char * BoolToString(bool b)
+{
+    return b ? "true" : "false";
+}
+
+void TestStaticProtobuf(benchmark::BenchmarkState& state, const string& encoded)
+{
+    for (int x = 0; x != state.max_x; ++x)
+    {
+        HFPBUserInfo userinfo;
+        if (userinfo.ParseFromString(encoded))
+        {
+            for (int i = 0; i != userinfo.goods_size(); ++i)
+            {
+                const HFPBUserGoods& goods = userinfo.goods(i);
+                uint32_t goods_id = goods.goods_id();
+                uint32_t goods_num = goods.goods_num();
+            }
+        }
+        string output;
+        userinfo.SerializeToString(&output);
+    }
+}
+
+void TestDynamicProtobuf(benchmark::BenchmarkState& state, const CompactProtobuf::Environment& env, const CompactProtobuf::Slice& encoded)
+{
+    for (int x = 0; x != state.max_x; ++x)
+    {
+        const CompactProtobuf::Descriptor * descriptor = env.FindMessageTypeByName("petlib.HFPBUserInfo");
+        CompactProtobuf::Message message(descriptor);
+        message.Init(encoded);
+
+        for (size_t i = 0; i != message.GetFieldSize("goods"); ++i)
+        {
+            CompactProtobuf::Message * goods_msg = message.GetMessage("goods", i);
+            uint32_t goods_id = goods_msg->GetInteger("goods_id", 0, NULL);
+            uint32_t goods_num = goods_msg->GetInteger("goods_num", 0, NULL);
+        }
+        string output;
+        message.ToString(&output);
+    }
+}
+
 int main(int argc, char* argv[])
 {
     if (argc != 3) return -1;
@@ -223,76 +100,71 @@ int main(int argc, char* argv[])
         CompactProtobuf::Slice slice;
         if (false == ReadFile(argv[1], &slice)) return -1;
         bool ok = env.Register(slice);
-        printf("%s\n", ok ? "true" : "false");
+        if (not ok) return -1;
         delete [] slice.start;
     }
-    const CompactProtobuf::Descriptor * descriptor = env.FindMessageTypeByName("Pair");
-    if (descriptor) printf("descriptor addr: %p\n", descriptor);
-
     CompactProtobuf::Slice slice;
     const char * filename = argv[2];
     
     if (ReadFile(filename, &slice) == false) return -2;
-    printf("start: %p\tend: %p\n", slice.start, slice.end);
+    //printf("start: %p\tend: %p\n", slice.start, slice.end);
 
-    CompactProtobuf::Message message(descriptor);
-    bool ok = message.Init(slice);
-    if (not ok) return -3;
+    string encoded(reinterpret_cast<char*>(slice.start), slice.end - slice.start);
 
-    //{
-    //    std::string s = message.GetString("s");
-    //    printf("s: [%s]\n", s.c_str());
-    //}
-    //{
-    //    std::string b = message.GetString("b");
-    //    printf("b: [%s]\n", b.c_str());
-    //}
-    //{
-    //    double d = message.GetReal("d", 0);
-    //    printf("d: [%lf]\n", d);
-    //}
-    {
-        CompactProtobuf::Message * t = message.GetMessage("t", 0);
-        assert (t != NULL);
-        printf("has_unknown_fields: %s\n", t->has_unknown_fields() ? "true" : "false");
-    }
-    //{
-    //    float f = message.GetReal("f");
-    //    printf("f: [%f]\n", f);
-    //}
-    //{
-    //    uint32_t low = message.GetInteger("i32", NULL);
-    //    printf("i32: %d\n", (int)low);
-    //}
-    //{
-    //    uint32_t low = message.GetInteger("u32", NULL);
-    //    printf("u32: %u\n", low);
-    //}
-    //{
-    //    uint32_t low = message.GetInteger("sf32", NULL);
-    //    printf("sf32: %u\n", low);
-    //}
-    //{
-    //    uint32_t low = message.GetInteger("s32", NULL);
-    //    printf("s32: %u\n", low);
-    //}
-    //{
-    //    uint32_t low = 0, hi = 0;
-    //    low = message.GetInteger("i64", &hi);
-    //    uint64_t u64 = hi;
-    //    u64 <<= 32;
-    //    u64 |= low;
+    const size_t kMaxTimes = 1 << 8;
+    benchmark::AddBench("TestStaticProtobuf", 50, kMaxTimes, 0, 0, boost::bind(TestStaticProtobuf, _1, encoded), NULL, NULL);
+    benchmark::AddBench("TestDynamicProtobuf", 50, kMaxTimes, 0, 0, boost::bind(TestDynamicProtobuf, _1, boost::ref(env), slice), NULL, NULL);
+    benchmark::ExecuteAll();
 
-    //    printf("i64: %ld\n", (int64_t)u64);
+    //const CompactProtobuf::Descriptor * descriptor = env.FindMessageTypeByName("petlib.HFPBUserInfo");
+    //if (not descriptor)
+    //{
+    //    fprintf(stderr, "FindMessageTypeByName HFPBUserInfo faield\n");
+    //    return -3;
+    //}
+
+    //CompactProtobuf::Message message(descriptor);
+    //bool ok = message.Init(slice);
+    //if (not ok) return -3;
+
+    //for (size_t i = 0; i != message.GetFieldSize("goods"); ++i)
+    //{
+    //    CompactProtobuf::Message * goods_msg = message.GetMessage("goods", i);
+    //    assert (goods_msg);
+    //    uint32_t goods_id = goods_msg->GetInteger("goods_id", 0, NULL);
+    //    uint32_t goods_num = goods_msg->GetInteger("goods_num", 0, NULL);
+    //    printf("good_id = %u\tgoods_num = %u\n", goods_id, goods_num);
     //}
 
     //{
-    //    uint32_t low = 0, hi = 0;
-    //    low = message.GetInteger("u64", &hi);
-    //    uint64_t u64 = hi;
-    //    u64 <<= 32;
-    //    u64 |= low;
-    //    printf("u64: %lu\n", u64);
+    //    uint32_t low, flag;
+    //    for (size_t i = 0; i != message.GetFieldSize("test"); ++i)
+    //    {
+    //        CompactProtobuf::Message * msg = message.GetMessage("test", i);
+    //        //low = msg->GetInteger("idx", 0, NULL);
+    //        //flag = msg->GetInteger("flag", 0, NULL);
+    //        msg->Clear();
+    //        msg->AddInteger("idx", i*2, 0);
+
+    //        //printf("i = %4lu    low = %4d    flag = %s\n", i, low, BoolToString(flag));
+    //    }
+    //}
+
+    //{
+    //}
+
+    //{
+    //    string output;
+    //    bool bok = message.ToString(&output);
+    //    //printf("ToString %s!\n", bok ? "true" : "false");
+    //    if (bok)
+    //    {
+    //        WriteFile("/tmp/message.dump", output);
+    //    }
+    //    else
+    //    {
+    //        printf("ToString failed!\n");
+    //    }
     //}
 
     delete [] slice.start;

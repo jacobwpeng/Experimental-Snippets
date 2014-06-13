@@ -14,9 +14,11 @@
 #define  __COMPACT_PROTOBUF_H__
 
 #include <map>
+#include <list>
 #include <vector>
 #include <string>
 #include <boost/scoped_ptr.hpp>
+#include <boost/shared_ptr.hpp>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/descriptor_database.h>
 
@@ -27,6 +29,7 @@ namespace CompactProtobuf
     typedef uint8_t Byte;
     using std::string;
     using std::map;
+    using std::list;
     using std::vector;
 
     using google::protobuf::Descriptor;
@@ -35,7 +38,11 @@ namespace CompactProtobuf
     using google::protobuf::FileDescriptorSet;
     using google::protobuf::FileDescriptorProto;
 
+    struct Field;
     class Message;
+    typedef map<int, Field> FieldMap;
+    typedef boost::shared_ptr<Message> MessagePtr;
+
     struct Slice
     {
         Byte * start;
@@ -53,6 +60,14 @@ namespace CompactProtobuf
         float f;
     };
 
+    enum WireType
+    {
+        kVarint = 0,
+        k64Bits = 1,
+        kLengthDelimited = 2,
+        k32Bits = 5
+    };
+
     struct Value
     {
         Slice encoded;
@@ -63,21 +78,28 @@ namespace CompactProtobuf
                 uint64_t varint;
                 Double64Bits d;
                 Float32Bits f;
-                Message * m;
             } trivial;
+            MessagePtr m;
             string s;
             size_t len;
         } decoded;
     };
 
+    typedef vector<Value> ValueList;
     struct Field
     {
         bool decoded;
         bool unknown;
         int id;
+        WireType wire_type;
         const FieldDescriptor* field_descriptor;
+        ValueList values;
+
+        bool has_value() const;
         Value * value();
-        vector<Value> values;
+        Value * value(size_t idx);
+        const Value * value(size_t idx) const;
+        Value Delete(size_t idx);
     };
 
     class Environment
@@ -86,13 +108,18 @@ namespace CompactProtobuf
             Environment();
             ~Environment();
             bool Register(const Slice& slice);
-            const Descriptor* FindMessageTypeByName(const string& name);
+            const Descriptor* FindMessageTypeByName(const string& name) const;
 
         private:
             DescriptorPool pool_;
     };
 
-    typedef map<int, Field> FieldMap;
+    namespace Encoder
+    {
+        class EncoderBuffer;
+        bool EncodeMessage(const Message* message, EncoderBuffer* buf);
+    };
+    
 
     class Message
     {
@@ -101,32 +128,64 @@ namespace CompactProtobuf
             ~Message();
 
             bool Init(const Slice& slice);
-            void Clear();
-            bool has_unknown_fields() const;
-
-            uint32_t GetInteger(const string& name, size_t idx, uint32_t * hi);
-            string GetString(const string& name, size_t idx);
-            double GetReal(const string& name, size_t idx);
-            Message * GetMessage(const string& name, size_t idx);
-            size_t GetRepeatedSize(const string& name);
-
             bool ToString(std::string* output);
 
+            void Clear();
+            bool has_field() const;
+            bool has_field(const string& name) const;
+            bool has_unknown_field() const;
+
+            size_t GetFieldSize(const string& name);
+
+            /*-----------------------------------------------------------------------------
+             *  Field Get Operation
+             *-----------------------------------------------------------------------------*/
+            uint32_t GetInteger(const string& name, size_t idx, uint32_t * hi);
+            double GetReal(const string& name, size_t idx);
+            string GetString(const string& name, size_t idx);
+            Message * GetMessage(const string& name, size_t idx);
+
+            /*-----------------------------------------------------------------------------
+             *  Field Set Operation
+             *-----------------------------------------------------------------------------*/
+            void SetInteger(const string& name, size_t idx, uint32_t low, uint32_t hi);
+            void SetReal(const string& name, size_t idx, double val);
+            void SetString(const string& name, size_t idx, const string& val);
+
+            /*-----------------------------------------------------------------------------
+             *  Field Add Operation
+             *-----------------------------------------------------------------------------*/
+            void AddInteger(const string& name, uint32_t low, uint32_t hi);
+            void AddReal(const string& name, double val);
+            void AddString(const string& name, const string& val);
+            Message * AddMessage(const string& name);
+
+            /*-----------------------------------------------------------------------------
+             *  Field Delete Operation
+             *-----------------------------------------------------------------------------*/
+            uint32_t DeleteInteger(const string& name, size_t idx, uint32_t * hi);
+            double DeleteReal(const string& name, size_t idx);
+            string DeleteString(const string& name, size_t idx);
+            MessagePtr DeleteMessage(const string& name, size_t idx);
+
         private:
-            void AssertFieldDescriptor(const string& name, const FieldDescriptor* descriptor, FieldDescriptor::Type type);
-            void DecodeField(Field* field);
+            void CheckValidIndex(const Field& , const FieldDescriptor* , size_t idx);
+            void TryDecodeField(Field* field, const FieldDescriptor* );
+            const FieldDescriptor* CheckInteger(const string& name) const;
+            const FieldDescriptor* CheckString(const string& name) const;
+            const FieldDescriptor* CheckReal(const string& name) const;
+            const FieldDescriptor* CheckMessage(const string& name) const;
+            Message * InternalAddMessage(Field* field, const FieldDescriptor* field_descriptor);
+            /*-----------------------------------------------------------------------------
+             *  read-only access fields_ & unknown_fields_ & descriptor_
+             *-----------------------------------------------------------------------------*/
+            friend bool Encoder::EncodeMessage(const Message* message, Encoder::EncoderBuffer* buf);
 
         private:
             const Descriptor* descriptor_;
             FieldMap fields_;
             boost::scoped_ptr<FieldMap> unknown_fields_;
-            vector<Message*> embedded_messages_;
     };
-
-    namespace detail
-    {
-        uint32_t DecodeUInt64(uint64_t val, uint32_t * hi);
-    }
 };
 
 #endif   /* ----- #ifndef __COMPACT_PROTOBUF_H__  ----- */

@@ -13,6 +13,7 @@
 #include "compact_protobuf.h"
 #include "protobuf_parser.h"
 #include "protobuf_helper.h"
+#include "protobuf_encoder.h"
 
 #include <cstdio>
 #include <boost/foreach.hpp>
@@ -25,10 +26,41 @@ namespace CompactProtobuf
     /*-----------------------------------------------------------------------------
      *  Field
      *-----------------------------------------------------------------------------*/
+    bool Field::has_value() const
+    {
+        return not values.empty();
+    }
+
     Value * Field::value()
     {
         assert (values.size() == 1);
-        return &values[0];
+        return &(*values.begin());
+    }
+
+    Value * Field::value(size_t idx)
+    {
+        assert (values.size() > idx);
+        ValueList::iterator iter = values.begin();
+        std::advance(iter, idx);
+        return &(*iter);
+    }
+
+    const Value * Field::value(size_t idx) const
+    {
+        assert (values.size() > idx);
+        ValueList::const_iterator iter = values.begin();
+        std::advance(iter, idx);
+        return &(*iter);
+    }
+
+    Value Field::Delete(size_t idx)
+    {
+        assert (values.size() > idx);
+        ValueList::iterator iter = values.begin();
+        std::advance(iter, idx);
+        struct Value v = *iter;
+        values.erase(iter);
+        return v;
     }
     /*-----------------------------------------------------------------------------
      *  Environment
@@ -57,7 +89,7 @@ namespace CompactProtobuf
         return false;
     }
 
-    const Descriptor* Environment::FindMessageTypeByName(const string& name)
+    const Descriptor* Environment::FindMessageTypeByName(const string& name) const
     {
         return pool_.FindMessageTypeByName(name);
     }
@@ -69,10 +101,6 @@ namespace CompactProtobuf
 
     Message::~Message()
     {
-        for (size_t i = 0; i != embedded_messages_.size(); ++i)
-        {
-            delete embedded_messages_[i];
-        }
     }
 
     bool Message::Init(const Slice& slice)
@@ -99,62 +127,81 @@ namespace CompactProtobuf
         return true;
     }
 
-    bool Message::has_unknown_fields() const
+    bool Message::has_field() const
+    {
+        return fields_.size() != 0u;
+    }
+
+    bool Message::has_field(const string& name) const
+    {
+        const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
+        if (field_descriptor)
+        {
+            return fields_.find(field_descriptor->number()) != fields_.end();
+        }
+        return false;
+    }
+
+    bool Message::has_unknown_field() const
     {
         return unknown_fields_ != NULL and unknown_fields_->size() != 0u;
     }
 
     void Message::Clear()
     {
-        /* clear everything except unknwon fields in this message and all SubMessages */
+        /* clear everything except unknwon fields in this message and all embedded messages*/
+        FieldMap left_fields;
+        BOOST_FOREACH(FieldMap::value_type & p, fields_)
+        {
+            Field& field = p.second;
+            if (field.field_descriptor->type() == FieldDescriptor::TYPE_MESSAGE)
+            {
+                ValueList left_values;
+                BOOST_FOREACH(struct Value& value, field.values)
+                {
+                    MessagePtr & message = value.decoded.m;
+                    message->Clear();
+                    if (message->has_field() or message->has_unknown_field())
+                    {
+                        left_values.push_back(value);
+                    }
+                }
+                if (not left_values.empty())
+                {
+                    p.second.values.swap(left_values);
+                    left_fields.insert(p);
+                }
+            }
+        }
+        fields_.swap(left_fields);
     }
 
     uint32_t Message::GetInteger(const string& name, size_t idx, uint32_t * hi)
     {
-        const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
-        assert (field_descriptor);
-        FieldDescriptor::CppType cpp_type = field_descriptor->cpp_type();
-        assert (cpp_type == FieldDescriptor::CPPTYPE_INT32 
-                or cpp_type == FieldDescriptor::CPPTYPE_INT64
-                or cpp_type == FieldDescriptor::CPPTYPE_UINT32
-                or cpp_type == FieldDescriptor::CPPTYPE_UINT64
-                or cpp_type == FieldDescriptor::CPPTYPE_BOOL
-                or cpp_type == FieldDescriptor::CPPTYPE_ENUM);
-
+        const FieldDescriptor* field_descriptor = CheckInteger(name);
         int field_id = field_descriptor->number();
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end())              /* field no found */
         {
             if (field_descriptor->is_repeated()) assert (false); /* cannot index a empty repeated field with idx*/
             uint64_t default_value = Helper::DefaultIntegerValue(field_descriptor);
-            return detail::DecodeUInt64(default_value, hi);
+            return Helper::DecodeUInt64(default_value, hi);
         }
 
         Field & field = iter->second;
 
-        if (field_descriptor->is_repeated() and idx >= field.values.size())
-        {
-            /* out of range */
-            assert (false);
-        }
-        else if (not field.decoded)      /* field not decoded */
-        {
-            if (not Helper::DecodeField(&field, field_descriptor)) assert (false); /* invalid data */
-        }
-        else {}
+        CheckValidIndex(field, field_descriptor, idx);
+        TryDecodeField(&field, field_descriptor);
 
         assert (field.decoded);
         if (not field_descriptor->is_repeated()) idx = 0;
         uint64_t val = Helper::RetrieveIntegerValue(field, idx);
-        return detail::DecodeUInt64(val, hi);
+        return Helper::DecodeUInt64(val, hi);
     }
 
     string Message::GetString(const string& name, size_t idx)
     {
-        const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
-        assert (field_descriptor);
-        FieldDescriptor::CppType cpp_type = field_descriptor->cpp_type();
-        assert (cpp_type == FieldDescriptor::CPPTYPE_STRING);
+        const FieldDescriptor* field_descriptor = CheckString(name);
 
         int field_id = field_descriptor->number();
         FieldMap::iterator iter = fields_.find(field_id);
@@ -164,29 +211,17 @@ namespace CompactProtobuf
         }
 
         Field & field = iter->second;
-        if (field_descriptor->is_repeated() and idx >= field.values.size())
-        {
-            assert (false);                     /* out of range */
-        }
-        else if (not field.decoded)
-        {
-            if (not Helper::DecodeField(&field, field_descriptor) ) assert(false); /* invalid data */
-        }
-        else {}
-
-        if (field_descriptor->is_repeated() == false) idx = 0;
+        CheckValidIndex(field, field_descriptor, idx);
+        TryDecodeField(&field, field_descriptor);
 
         assert (field.decoded);
-        return field.values[idx].decoded.s;
+        if (field_descriptor->is_repeated() == false) idx = 0;
+        return field.value(idx)->decoded.s;
     }
 
     double Message::GetReal(const string& name, size_t idx)
     {
-        const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
-        assert (field_descriptor);
-        FieldDescriptor::CppType cpp_type = field_descriptor->cpp_type();
-        assert (cpp_type == FieldDescriptor::CPPTYPE_DOUBLE
-                or cpp_type == FieldDescriptor::CPPTYPE_FLOAT);
+        const FieldDescriptor* field_descriptor = CheckReal(name);
 
         int field_id = field_descriptor->number();
         FieldMap::iterator iter = fields_.find(field_id);
@@ -196,73 +231,15 @@ namespace CompactProtobuf
         }
 
         Field & field = iter->second;
-        if (field_descriptor->is_repeated() and idx >= field.values.size())
-        {
-            assert (false);                     /* out of range */
-        }
-        else if (not field.decoded)
-        {
-            Helper::DecodeField(&field, field_descriptor);
-        }
-        else {}
+        CheckValidIndex(field, field_descriptor, idx);
+        TryDecodeField(&field, field_descriptor);
 
         assert (field.decoded);
-
         if (field_descriptor->is_repeated() == false) idx = 0;
-        return Helper::RetrieveIntegerValue(field, idx);
+        return Helper::RetrieveRealValue(field, idx);
     }
 
-    Message * Message::GetMessage(const string& name, size_t idx)
-    {
-        const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
-        assert (field_descriptor);
-        FieldDescriptor::CppType cpp_type = field_descriptor->cpp_type();
-        assert (cpp_type == FieldDescriptor::CPPTYPE_MESSAGE);
-
-        int field_id = field_descriptor->number();
-        FieldMap::iterator iter = fields_.find(field_id);
-        if (iter == fields_.end())
-        {
-            const Descriptor* descriptor = field_descriptor->message_type();
-            assert (descriptor != NULL);
-
-            Message * embedded_message = Helper::MakeMessage(field_descriptor);
-            embedded_messages_.push_back(embedded_message);
-
-            Field field;
-            field.decoded = true;
-            field.id = field_id;
-            field.unknown = false;
-            field.field_descriptor = field_descriptor;
-            struct Value v;
-            v.decoded.trivial.m = embedded_message;
-            field.values.push_back(v);
-            fields_.insert(std::make_pair(field_id, field));
-
-            return embedded_message;
-        }
-
-        Field & field = iter->second;
-        if (field_descriptor->is_repeated() and idx >= field.values.size())
-        {
-            assert (false);                     /* out of range */
-        }
-        else if (not field.decoded)
-        {
-            if (not Helper::DecodeField(&field, field_descriptor) ) assert(false); /* invalid data */
-            BOOST_FOREACH(struct Value& value, field.values)
-            {
-                embedded_messages_.push_back(value.decoded.trivial.m);
-            }
-        }
-        else {}
-
-        assert (field.decoded);
-        if (not field_descriptor->is_repeated()) idx = 0;
-        return field.values[idx].decoded.trivial.m;
-    }
-
-    size_t Message::GetRepeatedSize(const string& name)
+    size_t Message::GetFieldSize(const string& name)
     {
         const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
         assert (field_descriptor);
@@ -273,34 +250,409 @@ namespace CompactProtobuf
         else return iter->second.values.size();
     }
 
-    bool Message::ToString(std::string* output)
+    void Message::SetInteger(const string& name, size_t idx, uint32_t low, uint32_t hi)
     {
-        BOOST_FOREACH(const FieldMap::value_type p, fields_)
+        const FieldDescriptor* field_descriptor = CheckInteger(name);
+        uint64_t val = hi;
+        val <<= 32;
+        val |= low;
+
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        if (iter == fields_.end())              /* field no found */
         {
-            const Field& field = p.second;
-            /* generate tag */
-            int tag = field.id;
-            tag <<= 3;
-            tag |= Helper::WireType(field.field_descriptor);
-            /* output->Append(tag) */
-
-            if (not field.decoded)
-            {
-            }
-            else
-            {
-
-            }
+            Field field;
+            field.decoded = true;
+            field.unknown = false;
+            field.id = field_id;
+            field.wire_type = Helper::GetWireType(field_descriptor);
+            field.field_descriptor = field_descriptor;
+            struct Value v;
+            Helper::SetInteger(&v, field_descriptor->type(), val);
+            field.values.push_back(v);
         }
-        return false;
+        else
+        {
+            Field & field = iter->second;
+
+            CheckValidIndex(field, field_descriptor, idx);
+            TryDecodeField(&field, field_descriptor);
+
+            assert (field.decoded);
+            if (not field_descriptor->is_repeated()) idx = 0;
+            Helper::SetInteger(field.value(idx), field_descriptor->type(), val);
+        }
     }
 
-    namespace detail
+    void Message::SetReal(const string& name, size_t idx, double val)
     {
-        uint32_t DecodeUInt64(uint64_t val, uint32_t * hi)
+        const FieldDescriptor* field_descriptor = CheckReal(name);
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        if (iter == fields_.end())              /* field no found */
         {
-            if (hi) *hi = (val >> 32) & 0xffffffff;
-            return val & 0xffffffff;
+            Field field;
+            field.decoded = true;
+            field.unknown = false;
+            field.id = field_id;
+            field.wire_type = Helper::GetWireType(field_descriptor);
+            field.field_descriptor = field_descriptor;
+            struct Value v;
+            Helper::SetReal(&v, field_descriptor->type(), val);
+            field.values.push_back(v);
         }
+        else
+        {
+            Field & field = iter->second;
+
+            CheckValidIndex(field, field_descriptor, idx);
+            TryDecodeField(&field, field_descriptor);
+
+            assert (field.decoded);
+            if (not field_descriptor->is_repeated()) idx = 0;
+            Helper::SetReal(field.value(idx), field_descriptor->type(), val);
+        }
+    }
+
+    void Message::SetString(const string& name, size_t idx, const string& val)
+    {
+        const FieldDescriptor* field_descriptor = CheckString(name);
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        if (iter == fields_.end())              /* field no found */
+        {
+            Field field;
+            field.decoded = true;
+            field.unknown = false;
+            field.id = field_id;
+            field.wire_type = Helper::GetWireType(field_descriptor);
+            field.field_descriptor = field_descriptor;
+            struct Value v;
+            Helper::SetString(&v, field_descriptor->type(), val);
+            field.values.push_back(v);
+        }
+        else
+        {
+            Field & field = iter->second;
+
+            CheckValidIndex(field, field_descriptor, idx);
+            TryDecodeField(&field, field_descriptor);
+
+            assert (field.decoded);
+            if (not field_descriptor->is_repeated()) idx = 0;
+            field.value(idx)->decoded.s = val;
+        }
+
+    }
+
+    Message * Message::GetMessage(const string& name, size_t idx)
+    {
+        const FieldDescriptor* field_descriptor = CheckMessage(name);
+
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        if (iter == fields_.end()) return NULL;
+
+        Field & field = iter->second;
+        CheckValidIndex(field, field_descriptor, idx);
+        TryDecodeField(&field, field_descriptor);
+
+        assert (field.decoded);
+        if (not field_descriptor->is_repeated()) idx = 0;
+        return field.value(idx)->decoded.m.get();
+    }
+
+    void Message::AddInteger(const string& name, uint32_t low, uint32_t hi)
+    {
+        const FieldDescriptor* field_descriptor = CheckInteger(name);
+        uint64_t val = hi;
+        val <<= 32;
+        val |= low;
+
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        if (iter == fields_.end())              /* field no found */
+        {
+            Field field;
+            field.decoded = true;
+            field.id = field_id;
+            field.unknown = false;
+            field.field_descriptor = field_descriptor;
+            field.wire_type = Helper::GetWireType(field_descriptor);
+            struct Value v;
+            Helper::SetInteger(&v, field_descriptor->type(), val);
+            field.values.push_back(v);
+            fields_.insert(std::make_pair(field_id, field));
+        }
+        else if (not field_descriptor->is_repeated())
+        {
+            /* cannot add value of non-repeated fields, use SetInteger*/
+            assert (false);
+        }
+        else
+        {
+            Field & field = iter->second;
+            TryDecodeField(&field, field_descriptor);
+
+            assert (field.decoded);
+            struct Value v;
+            Helper::SetInteger(&v, field_descriptor->type(), val);
+            field.values.push_back(v);
+        }
+    }
+
+    void Message::AddReal(const string& name, double val)
+    {
+        const FieldDescriptor* field_descriptor = CheckReal(name);
+
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        if (iter == fields_.end())              /* field no found */
+        {
+            Field field;
+            field.decoded = true;
+            field.id = field_id;
+            field.unknown = false;
+            field.field_descriptor = field_descriptor;
+            field.wire_type = Helper::GetWireType(field_descriptor);
+            struct Value v;
+            Helper::SetReal(&v, field_descriptor->type(), val);
+            field.values.push_back(v);
+            fields_.insert(std::make_pair(field_id, field));
+        }
+        else if (not field_descriptor->is_repeated())
+        {
+            /* cannot add value of non-repeated fields, use SetInteger*/
+            assert (false);
+        }
+        else
+        {
+            Field & field = iter->second;
+            TryDecodeField(&field, field_descriptor);
+
+            assert (field.decoded);
+            struct Value v;
+            Helper::SetReal(&v, field_descriptor->type(), val);
+            field.values.push_back(v);
+        }
+    }
+
+    void Message::AddString(const string& name, const string& val)
+    {
+        const FieldDescriptor* field_descriptor = CheckString(name);
+
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        if (iter == fields_.end())              /* field no found */
+        {
+            Field field;
+            field.decoded = true;
+            field.id = field_id;
+            field.unknown = false;
+            field.field_descriptor = field_descriptor;
+            field.wire_type = Helper::GetWireType(field_descriptor);
+            struct Value v;
+            Helper::SetString(&v, field_descriptor->type(), val);
+            field.values.push_back(v);
+            fields_.insert(std::make_pair(field_id, field));
+        }
+        else if (not field_descriptor->is_repeated())
+        {
+            /* cannot add value of non-repeated fields, use SetInteger*/
+            assert (false);
+        }
+        else
+        {
+            Field & field = iter->second;
+            TryDecodeField(&field, field_descriptor);
+
+            assert (field.decoded);
+            struct Value v;
+            Helper::SetString(&v, field_descriptor->type(), val);
+            field.values.push_back(v);
+        }
+    }
+
+    Message * Message::AddMessage(const string& name)
+    {
+        const FieldDescriptor* field_descriptor = CheckMessage(name);
+
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        if (iter == fields_.end())
+        {
+            Field field;
+            field.decoded = true;
+            field.id = field_id;
+            field.unknown = false;
+            field.field_descriptor = field_descriptor;
+            field.wire_type = Helper::GetWireType(field_descriptor);
+
+            fields_.insert(std::make_pair(field_id, field));
+            return InternalAddMessage(&fields_[field_id], field_descriptor);
+        }
+
+        if (not field_descriptor->is_repeated())
+        {
+            assert (false);                     /* use GetMessage */
+        }
+
+        Field & field = iter->second;
+        TryDecodeField(&field, field_descriptor);
+
+        assert (field.decoded);
+        return InternalAddMessage(&field, field_descriptor);
+    }
+
+    uint32_t Message::DeleteInteger(const string& name, size_t idx, uint32_t * hi)
+    {
+        const FieldDescriptor* field_descriptor = CheckInteger(name);
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        assert (iter != fields_.end());         /* field not found */
+
+        Field & field = iter->second;
+        CheckValidIndex(field, field_descriptor, idx);
+        TryDecodeField(&field, field_descriptor);
+
+        assert (field.decoded);
+        if (not field_descriptor->is_repeated()) idx = 0;
+        uint64_t val = Helper::RetrieveIntegerValue(field, idx);
+        field.Delete(idx);
+        if (not field.has_value()) fields_.erase(field.id);
+        return Helper::DecodeUInt64(val, hi);
+    }
+
+    double Message::DeleteReal(const string& name, size_t idx)
+    {
+        const FieldDescriptor* field_descriptor = CheckReal(name);
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        assert (iter != fields_.end());         /* field not found */
+
+        Field & field = iter->second;
+        CheckValidIndex(field, field_descriptor, idx);
+        TryDecodeField(&field, field_descriptor);
+
+        assert (field.decoded);
+        if (not field_descriptor->is_repeated()) idx = 0;
+        double val = field.Delete(idx).decoded.trivial.d.d;
+        if (not field.has_value()) fields_.erase(field.id);
+        return val;
+    }
+
+    string Message::DeleteString(const string& name, size_t idx)
+    {
+        const FieldDescriptor* field_descriptor = CheckString(name);
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        assert (iter != fields_.end());         /* field not found */
+
+        Field & field = iter->second;
+        CheckValidIndex(field, field_descriptor, idx);
+        TryDecodeField(&field, field_descriptor);
+
+        assert (field.decoded);
+        if (not field_descriptor->is_repeated()) idx = 0;
+        string val = field.Delete(idx).decoded.s;
+        if (not field.has_value()) fields_.erase(field.id);
+        return val;
+    }
+
+    MessagePtr Message::DeleteMessage(const string& name, size_t idx)
+    {
+        const FieldDescriptor* field_descriptor = CheckMessage(name);
+        int field_id = field_descriptor->number();
+        FieldMap::iterator iter = fields_.find(field_id);
+        assert (iter != fields_.end());         /* field not found */
+
+        Field & field = iter->second;
+        CheckValidIndex(field, field_descriptor, idx);
+        TryDecodeField(&field, field_descriptor);
+
+        assert (field.decoded);
+        if (not field_descriptor->is_repeated()) idx = 0;
+        MessagePtr val = field.Delete(idx).decoded.m;
+        if (not field.has_value()) fields_.erase(field.id);
+        return val;
+    }
+
+    bool Message::ToString(std::string* output)
+    {
+        Encoder::EncoderBuffer buffer;
+        bool bok = Encoder::EncodeMessage(this, &buffer);
+        if (not bok) return false;
+
+        buffer.ToString(output);
+        return true;
+    }
+
+    void Message::CheckValidIndex(const Field& field, const FieldDescriptor* field_descriptor, size_t idx)
+    {
+        if (field_descriptor->is_repeated() and idx >= field.values.size())
+        {
+            /* out of range */
+            assert (false);
+        }
+    }
+
+    void Message::TryDecodeField(Field* field, const FieldDescriptor* field_descriptor)
+    {
+        if (not field->decoded and not Helper::DecodeField(field, field_descriptor))
+        {
+            assert (false);                     /* invalid data */
+        }
+    }
+
+    const FieldDescriptor* Message::CheckInteger(const string& name) const
+    {
+        const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
+        assert (field_descriptor);
+        FieldDescriptor::CppType cpp_type = field_descriptor->cpp_type();
+        assert (cpp_type == FieldDescriptor::CPPTYPE_INT32 
+                or cpp_type == FieldDescriptor::CPPTYPE_INT64
+                or cpp_type == FieldDescriptor::CPPTYPE_UINT32
+                or cpp_type == FieldDescriptor::CPPTYPE_UINT64
+                or cpp_type == FieldDescriptor::CPPTYPE_BOOL
+                or cpp_type == FieldDescriptor::CPPTYPE_ENUM);
+        return field_descriptor;
+    }
+
+    const FieldDescriptor* Message::CheckString(const string& name) const
+    {
+        const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
+        assert (field_descriptor);
+        FieldDescriptor::CppType cpp_type = field_descriptor->cpp_type();
+        assert (cpp_type == FieldDescriptor::CPPTYPE_STRING);
+        return field_descriptor;
+    }
+
+    const FieldDescriptor* Message::CheckReal(const string& name) const
+    {
+        const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
+        assert (field_descriptor);
+        FieldDescriptor::CppType cpp_type = field_descriptor->cpp_type();
+        assert (cpp_type == FieldDescriptor::CPPTYPE_DOUBLE
+                or cpp_type == FieldDescriptor::CPPTYPE_FLOAT);
+        return field_descriptor;
+    }
+
+    const FieldDescriptor* Message::CheckMessage(const string& name) const
+    {
+        const FieldDescriptor* field_descriptor = descriptor_->FindFieldByName(name);
+        assert (field_descriptor);
+        FieldDescriptor::CppType cpp_type = field_descriptor->cpp_type();
+        assert (cpp_type == FieldDescriptor::CPPTYPE_MESSAGE);
+        return field_descriptor;
+    }
+
+    Message * Message::InternalAddMessage(Field* field, const FieldDescriptor* field_descriptor)
+    {
+        MessagePtr embedded_message = Helper::MakeMessage(field_descriptor);
+
+        struct Value v;
+        v.decoded.m = embedded_message;
+        field->values.push_back(v);
+        return embedded_message.get();
     }
 }

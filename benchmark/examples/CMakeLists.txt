@@ -2,7 +2,7 @@ project(benchmark_examples)
 
 set(APP "run")
 
-list(APPEND app_srcs main.cc userinfo.pb.cc)
+list(APPEND app_srcs main.cc userinfo.pb.cc log_stream.cc log_streambuf.cc)
 find_library(PROTOBUF "protobuf")
 
 add_executable(${APP} ${app_srcs})

@@ -3,7 +3,7 @@
 #
 #          FILE: admin.sh
 # 
-#         USAGE: ./admin.sh [make||rebuildclean|start|stop]
+#         USAGE: ./admin.sh [make|rebuild|clean|start|stop|test]
 # 
 #   DESCRIPTION: 
 # 
@@ -13,7 +13,7 @@ set -o nounset                              # Treat unset variables as an error
 
 function Usage
 {
-    echo "$0 [make|rebuild|clean|start|stop]"
+    echo "$0 [make|rebuild|clean|start|stop|test]"
     exit -1
 }
 
@@ -24,17 +24,21 @@ function DoMake
 
 function DoRebuild
 {
-    mkdir -p build/ && cd build/ && cmake .. -DCMAKE_BUILD_TYPE=debug && make -j4
+    mkdir -p build/ && cd build/ && cmake .. -DCMAKE_BUILD_TYPE=release && make -j4
 }
 
 #function DoClean
 #{
-#    #no-op
 #}
 #
 function DoRun
 {
-    ./build/pbparser /tmp/pair.desc /tmp/pair.dump
+    ./build/run data/userinfo.desc data/userinfo.backup
+#    ./build/run /tmp/pair.desc /tmp/pair.dump
+}
+function DoTest
+{
+    ./build/tests/gtest-all
 }
 #
 #function DoStop
@@ -52,6 +56,9 @@ case "$cmd" in
     ;;
     "stop")
         DoStop
+    ;;
+    "test")
+        DoTest
     ;;
     "make")
         DoMake

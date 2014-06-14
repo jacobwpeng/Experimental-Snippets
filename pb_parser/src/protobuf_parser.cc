@@ -42,7 +42,7 @@ namespace CompactProtobuf
         {
             ParserStatus status = ParseVarint(state);
             if (status != kOk) return status;
-            uint64_t tag = state->v.decoded.trivial.varint;
+            uint64_t tag = state->v.decoded.primitive.varint;
             state->field_id = GetFieldId(tag);
             state->wire_type = GetWireType(tag);
 
@@ -65,7 +65,7 @@ namespace CompactProtobuf
                 ++cur;
                 ++len;
             }
-            state->v.decoded.trivial.varint = val;
+            state->v.decoded.primitive.varint = val;
             *plen = len;
             return kOk;
         }
@@ -101,7 +101,7 @@ namespace CompactProtobuf
             ParserStatus status = ParseVarint(state);
             if (status != kOk) return status;
 
-            uint64_t len = state->v.decoded.trivial.varint;
+            uint64_t len = state->v.decoded.primitive.varint;
             if (state->slice.start + state->pos + len > state->slice.end) return kNeedsMore;
 
             /*-----------------------------------------------------------------------------
@@ -120,13 +120,13 @@ namespace CompactProtobuf
             ParserStatus status = ParseVarintInternal(state, &len);
             if (status != kOk) return status;
 
-            uint64_t part_len = state->v.decoded.trivial.varint;
+            uint64_t part_len = state->v.decoded.primitive.varint;
             if (state->slice.start + state->pos + len + part_len > state->slice.end) return kNeedsMore;
 
             state->v.encoded.start = state->slice.start + state->pos;
             state->v.encoded.end = state->slice.start + state->pos + len + part_len;
             state->pos += len + part_len;
-            state->v.decoded.len = len;
+            state->v.decoded.primitive.len = len;
             return kOk;
         }
 
@@ -135,7 +135,7 @@ namespace CompactProtobuf
             Byte * cur = state->slice.start + state->pos;
             if (cur + 8 > state->slice.end) return kNeedsMore;
 
-            state->v.decoded.trivial.d.d = *((double*)(cur));
+            state->v.decoded.primitive.d.d = *((double*)(cur));
             state->pos += 8;
             return kOk;
         }
@@ -156,7 +156,7 @@ namespace CompactProtobuf
             Byte * cur = state->slice.start + state->pos;
             if (cur + 4 > state->slice.end) return kNeedsMore;
 
-            state->v.decoded.trivial.f.f = *((float*)(cur));
+            state->v.decoded.primitive.f.f = *((float*)(cur));
             state->pos += 4;
             return kOk;
         }

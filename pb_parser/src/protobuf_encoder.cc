@@ -97,12 +97,12 @@ namespace CompactProtobuf
             switch (type)
             {
                 case FieldDescriptor::TYPE_SINT32:
-                    val_u32 = static_cast<uint32_t>(value.decoded.trivial.varint);
+                    val_u32 = static_cast<uint32_t>(value.decoded.primitive.varint);
                     val = (val_u32 << 1) ^ (val_u32 >> 31);
                     break;
 
                 case FieldDescriptor::TYPE_SINT64:
-                    val = value.decoded.trivial.varint;
+                    val = value.decoded.primitive.varint;
                     val = (val << 1) ^ (val >> 63);
                     break;
                 default:
@@ -261,7 +261,7 @@ namespace CompactProtobuf
                 case FieldDescriptor::TYPE_UINT64:
                 case FieldDescriptor::TYPE_BOOL:
                 case FieldDescriptor::TYPE_ENUM:
-                    val = value.decoded.trivial.varint;
+                    val = value.decoded.primitive.varint;
                     EncodeVarint(val, buf);
                     break;
                 default:
@@ -289,13 +289,13 @@ namespace CompactProtobuf
         void Encode32Bit(const struct Value& value, EncoderBuffer* buf)
         {
             assert (buf);
-            buf->Append(reinterpret_cast<const Byte*>(&value.decoded.trivial.f.u), 4);
+            buf->Append(reinterpret_cast<const Byte*>(&value.decoded.primitive.f.u), 4);
         }
 
         void Encode64Bit(const struct Value& value, EncoderBuffer* buf)
         {
             assert (buf);
-            buf->Append(reinterpret_cast<const Byte*>(&value.decoded.trivial.d.u), 8);
+            buf->Append(reinterpret_cast<const Byte*>(&value.decoded.primitive.d.u), 8);
         }
 
         void EncodePackedField(const Field& field, EncoderBuffer* buf)

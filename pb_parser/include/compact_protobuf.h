@@ -78,10 +78,10 @@ namespace CompactProtobuf
                 uint64_t varint;
                 Double64Bits d;
                 Float32Bits f;
-            } trivial;
+                size_t len;
+            } primitive;
             MessagePtr m;
             string s;
-            size_t len;
         } decoded;
     };
 
@@ -100,6 +100,7 @@ namespace CompactProtobuf
         Value * value(size_t idx);
         const Value * value(size_t idx) const;
         Value Delete(size_t idx);
+        void Append(const Value& value);
     };
 
     class Environment

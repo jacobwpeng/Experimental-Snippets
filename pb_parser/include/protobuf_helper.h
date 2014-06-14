@@ -21,12 +21,13 @@ namespace CompactProtobuf
     {
         bool ParseMessageLazy(const Slice& slice, const Descriptor* descriptor, FieldMap* fields);
         bool CheckAllRequiredField(FieldMap* fileds, const Descriptor* descriptor);
-        bool DecodeField(Field* field, const FieldDescriptor* descriptor);
-        bool DecodeVarint(Field* field, const FieldDescriptor* descriptor);
-        bool DecodeVarintWithZigZag(Field* field, const FieldDescriptor* descriptor);
-        bool DecodeFixed(Field* field, const FieldDescriptor* descriptor);
-        bool DecodeString(Field* field, const FieldDescriptor* descriptor);
-        bool DecodeMessage(Field* field, const FieldDescriptor* descriptor);
+        bool DecodeField(Field* field);
+        bool DecodePacked(Field* field);
+        bool DecodeVarint(Field* field);
+        bool DecodeVarintWithZigZag(Field* field);
+        bool DecodeFixed(Field* field);
+        bool DecodeString(Field* field);
+        bool DecodeMessage(Field* field);
         uint32_t DecodeUInt64(uint64_t val, uint32_t * hi);
 
         uint64_t DefaultIntegerValue(const FieldDescriptor* descriptor);
@@ -54,6 +55,6 @@ namespace CompactProtobuf
     };
 }
 
-#define TRACE_TIME_CONSUME TraceTimeConsume __tmp_time_consume__(__FILE__, __LINE__)
+#define TRACE_TIME_CONSUME CompactProtobuf::TraceTimeConsume __tmp_time_consume__(__FILE__, __LINE__)
 
 #endif   /* ----- #ifndef __PROTOBUF_HELPER_H__  ----- */

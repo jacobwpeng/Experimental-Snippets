@@ -15,10 +15,17 @@
 #include <cassert>
 #include <vector>
 #include <boost/bind.hpp>
+
 #include "compact_protobuf.h"
+#include "protobuf_helper.h"
 
 #include "benchmark.h"
 #include "userinfo.pb.h"
+
+extern "C"
+{
+#include "pbc.h"
+}
 
 using namespace std;
 using namespace petlib;
@@ -68,27 +75,81 @@ void TestStaticProtobuf(benchmark::BenchmarkState& state, const string& encoded)
                 uint32_t goods_num = goods.goods_num();
             }
         }
-        string output;
-        userinfo.SerializeToString(&output);
+        //string output;
+        //userinfo.SerializeToString(&output);
     }
 }
 
 void TestDynamicProtobuf(benchmark::BenchmarkState& state, const CompactProtobuf::Environment& env, const CompactProtobuf::Slice& encoded)
 {
+    using CompactProtobuf::Message;
     for (int x = 0; x != state.max_x; ++x)
     {
         const CompactProtobuf::Descriptor * descriptor = env.FindMessageTypeByName("petlib.HFPBUserInfo");
         CompactProtobuf::Message message(descriptor);
         message.Init(encoded);
 
-        for (size_t i = 0; i != message.GetFieldSize("goods"); ++i)
+        int size = message.GetFieldSize("goods");
+        for (int i = 0; i != size; ++i)
         {
             CompactProtobuf::Message * goods_msg = message.GetMessage("goods", i);
             uint32_t goods_id = goods_msg->GetInteger("goods_id", 0, NULL);
             uint32_t goods_num = goods_msg->GetInteger("goods_num", 0, NULL);
         }
-        string output;
-        message.ToString(&output);
+
+        //string output;
+        //message.ToString(&output);
+    }
+}
+
+void TestProtobufReflection(benchmark::BenchmarkState& state, const string& encoded)
+{
+    using namespace google::protobuf;
+
+    for (int x = 0; x != state.max_x; ++x)
+    {
+        HFPBUserInfo userinfo;
+        if (userinfo.ParseFromString(encoded))
+        {
+            const Reflection * ref = userinfo.GetReflection();
+            const Descriptor * descriptor = userinfo.GetDescriptor();
+            const FieldDescriptor * field_descriptor = descriptor->FindFieldByName("goods");
+
+            int size = ref->FieldSize(userinfo, field_descriptor);
+            for (int i = 0; i < size; ++i)
+            {
+                const Message & msg = ref->GetRepeatedMessage(userinfo, field_descriptor, i);
+                const Descriptor * goods_descriptor = msg.GetDescriptor();
+                const Reflection * goods_ref = msg.GetReflection();
+
+                const FieldDescriptor * goods_field_descriptor = goods_descriptor->FindFieldByName("goods_id");
+                uint32_t goods_id = goods_ref->GetUInt32(msg, goods_field_descriptor);
+                goods_field_descriptor = goods_descriptor->FindFieldByName("goods_num");
+                uint32_t goods_num = goods_ref->GetUInt32(msg, goods_field_descriptor);
+            }
+        }
+        //string output;
+        //userinfo.SerializeToString(&output);
+    }
+}
+
+void TestPbc(benchmark::BenchmarkState& state, struct pbc_env * env, const CompactProtobuf::Slice & encoded)
+{
+    struct pbc_slice slice;
+    slice.buffer = encoded.start;
+    slice.len = encoded.end - encoded.start;
+
+    for (int x = 0; x != state.max_x; ++x)
+    {
+        struct pbc_rmessage * r_msg = pbc_rmessage_new(env, "petlib.HFPBUserInfo", &slice);
+        int size = pbc_rmessage_size(r_msg, "goods");
+        for (int i = 0; i < size; ++i)
+        {
+            struct pbc_rmessage * p = pbc_rmessage_message(r_msg , "goods", i);
+            uint32_t goods_id = pbc_rmessage_integer(p, "goods_id", i, NULL);
+            uint32_t goods_num = pbc_rmessage_integer(p, "goods_num", i, NULL);
+        }
+        pbc_rmessage_delete(r_msg);
     }
 }
 
@@ -96,11 +157,19 @@ int main(int argc, char* argv[])
 {
     if (argc != 3) return -1;
     CompactProtobuf::Environment env;
+	struct pbc_env * cenv = pbc_new();
     {
         CompactProtobuf::Slice slice;
         if (false == ReadFile(argv[1], &slice)) return -1;
         bool ok = env.Register(slice);
         if (not ok) return -1;
+        {
+            struct pbc_slice sl;
+            sl.buffer = slice.start;
+            sl.len = slice.end - slice.start;
+            int ret = pbc_register(cenv, &sl);
+            assert (ret == 0);
+        }
         delete [] slice.start;
     }
     CompactProtobuf::Slice slice;
@@ -111,9 +180,12 @@ int main(int argc, char* argv[])
 
     string encoded(reinterpret_cast<char*>(slice.start), slice.end - slice.start);
 
-    const size_t kMaxTimes = 1 << 8;
-    benchmark::AddBench("TestStaticProtobuf", 50, kMaxTimes, 0, 0, boost::bind(TestStaticProtobuf, _1, encoded), NULL, NULL);
-    benchmark::AddBench("TestDynamicProtobuf", 50, kMaxTimes, 0, 0, boost::bind(TestDynamicProtobuf, _1, boost::ref(env), slice), NULL, NULL);
+
+    const size_t kMaxTimes = 1 << 12;
+    benchmark::AddBench("Static", 50, kMaxTimes, 0, 0, boost::bind(TestStaticProtobuf, _1, encoded), NULL, NULL);
+    benchmark::AddBench("Reflection", 50, kMaxTimes, 0, 0, boost::bind(TestProtobufReflection, _1, encoded), NULL, NULL);
+    benchmark::AddBench("Dynamic", 50, kMaxTimes, 0, 0, boost::bind(TestDynamicProtobuf, _1, boost::ref(env), slice), NULL, NULL);
+    benchmark::AddBench("PBC", 50, kMaxTimes, 0, 0, boost::bind(TestPbc, _1, cenv, slice), NULL, NULL);
     benchmark::ExecuteAll();
 
     //const CompactProtobuf::Descriptor * descriptor = env.FindMessageTypeByName("petlib.HFPBUserInfo");

@@ -39,7 +39,7 @@ namespace CompactProtobuf
     {
         e = GetTimestamp();
         uint64_t interval = e - s;
-        if (interval > 10) fprintf(stderr, "[%s:%d] %lu\n", file, line, (e-s));
+        if (interval > 100) fprintf(stderr, "[%s:%d] %lu\n", file, line, (e-s));
     }
 
     namespace Helper
@@ -92,7 +92,7 @@ namespace CompactProtobuf
                     const FieldDescriptor* field_descriptor = descriptor->FindFieldByNumber(field.id);
                     field.unknown = (field_descriptor == NULL);
                     field.wire_type = state.wire_type;
-                    field.values.push_back(state.v);
+                    field.Append(state.v);
                     field.field_descriptor = field_descriptor;
                     fields->insert(std::make_pair(field.id, field));
                 }
@@ -103,7 +103,7 @@ namespace CompactProtobuf
                     if (field.unknown or field.field_descriptor->label() == FieldDescriptor::LABEL_REPEATED)
                     {
                         /* unknown field or repeated field, both we save all entry*/
-                        field.values.push_back(state.v);
+                        field.Append(state.v);
                     }
                     else
                     {
@@ -143,10 +143,15 @@ namespace CompactProtobuf
             return true;
         }
 
-        bool DecodeField(Field* field, const FieldDescriptor* descriptor)
+        bool DecodeField(Field* field)
         {
             assert (field);
-            assert (descriptor);
+            assert (field->field_descriptor);
+
+            if (field->field_descriptor->is_packed())
+            {
+                return DecodePacked(field);
+            }
 
             switch(field->field_descriptor->type())
             {
@@ -156,11 +161,11 @@ namespace CompactProtobuf
                 case FieldDescriptor::TYPE_UINT64:
                 case FieldDescriptor::TYPE_BOOL:
                 case FieldDescriptor::TYPE_ENUM:
-                    return DecodeVarint(field, descriptor);
+                    return DecodeVarint(field);
 
                 case FieldDescriptor::TYPE_SINT32:
                 case FieldDescriptor::TYPE_SINT64:
-                    return DecodeVarintWithZigZag(field, descriptor);
+                    return DecodeVarintWithZigZag(field);
 
                 case FieldDescriptor::TYPE_FIXED32:
                 case FieldDescriptor::TYPE_FIXED64:
@@ -168,14 +173,14 @@ namespace CompactProtobuf
                 case FieldDescriptor::TYPE_SFIXED64:
                 case FieldDescriptor::TYPE_DOUBLE:
                 case FieldDescriptor::TYPE_FLOAT:
-                    return DecodeFixed(field, descriptor);
+                    return DecodeFixed(field);
 
                 case FieldDescriptor::TYPE_STRING:
                 case FieldDescriptor::TYPE_BYTES:
-                    return DecodeString(field, descriptor);
+                    return DecodeString(field);
 
                 case FieldDescriptor::TYPE_MESSAGE:
-                    return DecodeMessage(field, descriptor);
+                    return DecodeMessage(field);
 
                 case FieldDescriptor::TYPE_GROUP:
                     /* deprecated */
@@ -183,7 +188,33 @@ namespace CompactProtobuf
             }
         }
 
-        bool DecodeVarint(Field* field, const FieldDescriptor* descriptor)
+        bool DecodePacked(Field* field)
+        {
+            assert (field->field_descriptor->is_packed());
+            ProtobufParser::ParserState state;
+            state.slice.start = field->value()->encoded.start + field->value()->decoded.primitive.len;
+            state.slice.end = field->value()->encoded.end;
+            state.pos = 0;
+
+            unsigned idx = 0;
+            while (state.slice.start + state.pos < state.slice.end)
+            {
+                ProtobufParser::ParserStatus status = ParseVarint(&state);
+                if (status != ProtobufParser::kOk) return false;
+                if (idx == 0) field->value()->decoded.primitive.varint = state.v.decoded.primitive.varint;
+                else
+                {
+                    struct Value v;
+                    v.decoded.primitive.varint = state.v.decoded.primitive.varint;
+                    field->Append(v);
+                }
+            }
+
+            field->decoded = true;
+            return true;
+        }
+
+        bool DecodeVarint(Field* field)
         {
             ProtobufParser::ParserState state;
             BOOST_FOREACH(struct Value& value, field->values)
@@ -193,15 +224,15 @@ namespace CompactProtobuf
                 state.pos = 0;
                 ProtobufParser::ParserStatus status = ParseVarint(&state);
                 if (status != ProtobufParser::kOk) return false;
-                value.decoded.trivial.varint = state.v.decoded.trivial.varint;
+                value.decoded.primitive.varint = state.v.decoded.primitive.varint;
             }
             field->decoded = true;
             return true;
         }
 
-        bool DecodeVarintWithZigZag(Field* field, const FieldDescriptor* descriptor)
+        bool DecodeVarintWithZigZag(Field* field)
         {
-            if (false == DecodeVarint(field, descriptor)) return false;
+            if (false == DecodeVarint(field)) return false;
             assert (field->decoded);
 
             BOOST_FOREACH(struct Value& value, field->values)
@@ -209,14 +240,14 @@ namespace CompactProtobuf
                 if (field->field_descriptor->type() == FieldDescriptor::TYPE_SINT32 
                         or field->field_descriptor->type() == FieldDescriptor::TYPE_SFIXED32)
                 {
-                    uint32_t val = static_cast<uint32_t>(value.decoded.trivial.varint);
-                    value.decoded.trivial.varint = (val & 0x1) == 0 ? (val >> 1) : -(val >> 1) - 1;
+                    uint32_t val = static_cast<uint32_t>(value.decoded.primitive.varint);
+                    value.decoded.primitive.varint = (val & 0x1) == 0 ? (val >> 1) : -(val >> 1) - 1;
                 }
                 else if (field->field_descriptor->type() == FieldDescriptor::TYPE_SINT64
                         or field->field_descriptor->type() == FieldDescriptor::TYPE_SFIXED64)
                 {
-                    uint64_t val = value.decoded.trivial.varint;
-                    value.decoded.trivial.varint = (val & 0x1) == 0 ? (val >> 1) : -(val >> 1) - 1;
+                    uint64_t val = value.decoded.primitive.varint;
+                    value.decoded.primitive.varint = (val & 0x1) == 0 ? (val >> 1) : -(val >> 1) - 1;
                 }
                 else 
                 { 
@@ -227,7 +258,7 @@ namespace CompactProtobuf
             return true;
         }
 
-        bool DecodeFixed(Field* field, const FieldDescriptor* descriptor)
+        bool DecodeFixed(Field* field)
         {
             BOOST_FOREACH(struct Value& value, field->values)
             {
@@ -235,13 +266,13 @@ namespace CompactProtobuf
                         or field->field_descriptor->type() == FieldDescriptor::TYPE_SFIXED64
                         or field->field_descriptor->type() == FieldDescriptor::TYPE_DOUBLE)
                 {
-                    value.decoded.trivial.d.d = *(double*)(value.encoded.start);
+                    value.decoded.primitive.d.d = *(double*)(value.encoded.start);
                 }
                 else if (field->field_descriptor->type() == FieldDescriptor::TYPE_FIXED32 
                         or field->field_descriptor->type() == FieldDescriptor::TYPE_SFIXED32
                         or field->field_descriptor->type() == FieldDescriptor::TYPE_FLOAT)
                 {
-                    value.decoded.trivial.f.f = *(float*)(value.encoded.start);
+                    value.decoded.primitive.f.f = *(float*)(value.encoded.start);
                 }
                 else { return false; }
             }
@@ -249,7 +280,7 @@ namespace CompactProtobuf
             return true;
         }
 
-        bool DecodeString(Field* field, const FieldDescriptor* descriptor)
+        bool DecodeString(Field* field)
         {
             ParserState state;
             BOOST_FOREACH(struct Value& value, field->values)
@@ -273,17 +304,17 @@ namespace CompactProtobuf
             return true;
         }
 
-        bool DecodeMessage(Field* field, const FieldDescriptor* descriptor)
+        bool DecodeMessage(Field* field)
         {
             assert (field);
-            assert (descriptor);
+            assert (field->field_descriptor);
             assert (field->field_descriptor->type() == FieldDescriptor::TYPE_MESSAGE);
 
             BOOST_FOREACH(struct Value& value, field->values)
             {
-                MessagePtr message = MakeMessage(descriptor);
+                MessagePtr message = MakeMessage(field->field_descriptor);
                 Slice slice;
-                slice.start = value.encoded.start + value.decoded.len;
+                slice.start = value.encoded.start + value.decoded.primitive.len;
                 slice.end = value.encoded.end;
                 if (false == message->Init(slice) ) return false;
 
@@ -336,15 +367,15 @@ namespace CompactProtobuf
                 case FieldDescriptor::TYPE_INT64:
                 case FieldDescriptor::TYPE_UINT64:
                 case FieldDescriptor::TYPE_SINT64:
-                    return field.value(idx)->decoded.trivial.varint;
+                    return field.value(idx)->decoded.primitive.varint;
 
                 case FieldDescriptor::TYPE_SFIXED32:
                 case FieldDescriptor::TYPE_FIXED32:
-                    return field.value(idx)->decoded.trivial.f.u;
+                    return field.value(idx)->decoded.primitive.f.u;
 
                 case FieldDescriptor::TYPE_FIXED64:
                 case FieldDescriptor::TYPE_SFIXED64:
-                    return field.value(idx)->decoded.trivial.d.u;
+                    return field.value(idx)->decoded.primitive.d.u;
 
                 default:
                     assert (false);
@@ -364,15 +395,15 @@ namespace CompactProtobuf
                 case FieldDescriptor::TYPE_INT64:
                 case FieldDescriptor::TYPE_UINT64:
                 case FieldDescriptor::TYPE_SINT64:
-                    value->decoded.trivial.varint = val;
+                    value->decoded.primitive.varint = val;
                     break;
                 case FieldDescriptor::TYPE_SFIXED32:
                 case FieldDescriptor::TYPE_FIXED32:
-                    value->decoded.trivial.f.u = val;
+                    value->decoded.primitive.f.u = val;
                     break;
                 case FieldDescriptor::TYPE_FIXED64:
                 case FieldDescriptor::TYPE_SFIXED64:
-                    value->decoded.trivial.d.u = val;
+                    value->decoded.primitive.d.u = val;
                 default:
                     assert(false);
             }
@@ -383,10 +414,10 @@ namespace CompactProtobuf
             switch (type)
             {
                 case FieldDescriptor::TYPE_FLOAT:
-                    value->decoded.trivial.f.f = val;
+                    value->decoded.primitive.f.f = val;
                     break;
                 case FieldDescriptor::TYPE_DOUBLE:
-                    value->decoded.trivial.d.u = val;
+                    value->decoded.primitive.d.u = val;
                     break;
                 default:
                     assert (false);
@@ -421,9 +452,9 @@ namespace CompactProtobuf
             switch (field.field_descriptor->type())
             {
                 case FieldDescriptor::TYPE_DOUBLE:
-                    return field.value(idx)->decoded.trivial.d.d;
+                    return field.value(idx)->decoded.primitive.d.d;
                 case FieldDescriptor::TYPE_FLOAT:
-                    return field.value(idx)->decoded.trivial.f.f;
+                    return field.value(idx)->decoded.primitive.f.f;
                 default:
                     assert (false);
                     return 0;

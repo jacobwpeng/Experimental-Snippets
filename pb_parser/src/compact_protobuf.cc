@@ -82,6 +82,7 @@ namespace CompactProtobuf
 
     bool Environment::Register(const Slice& slice)
     {
+        if (slice.end <= slice.start) return false;
         FileDescriptorSet protos;
         bool ok = protos.ParseFromArray(slice.start, slice.end - slice.start);
         if (ok)
@@ -132,6 +133,14 @@ namespace CompactProtobuf
             }
         }
         return true;
+    }
+
+    bool Message::FromString(const string& encoded)
+    {
+        Slice slice;
+        slice.start = reinterpret_cast<Byte*>(const_cast<char*>(encoded.data()));
+        slice.end = slice.start + encoded.size();
+        return Init(slice);
     }
 
     bool Message::has_field() const

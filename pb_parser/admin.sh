@@ -33,7 +33,7 @@ function DoRebuild
 #
 function DoRun
 {
-    ./build/run data/userinfo.desc data/userinfo.backup
+    ./build/example/run data/userinfo.desc data/userinfo.backup
 #    ./build/run /tmp/pair.desc /tmp/pair.dump
 }
 function DoTest

@@ -129,6 +129,7 @@ namespace CompactProtobuf
             ~Message();
 
             bool Init(const Slice& slice);
+            bool FromString(const string& encoded);
             bool ToString(std::string* output);
 
             void Clear();

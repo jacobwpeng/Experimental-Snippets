@@ -42,6 +42,8 @@ namespace CompactProtobuf
 
         MessagePtr MakeMessage(const FieldDescriptor* field_descriptor);
         WireType GetWireType(const FieldDescriptor* field_descriptor);
+
+        void ZigzagDecode(uint64_t* val);
     }
 
     struct TraceTimeConsume

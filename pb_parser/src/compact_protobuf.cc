@@ -22,7 +22,6 @@
 
 namespace CompactProtobuf
 {
-
     /*-----------------------------------------------------------------------------
      *  Field
      *-----------------------------------------------------------------------------*/
@@ -41,18 +40,12 @@ namespace CompactProtobuf
     {
         assert (values.size() > idx);
         return &values[idx];
-        //ValueList::iterator iter = values.begin();
-        //std::advance(iter, idx);
-        //return &(*iter);
     }
 
     const Value * Field::value(size_t idx) const
     {
         assert (values.size() > idx);
         return &values[idx];
-        //ValueList::const_iterator iter = values.begin();
-        //std::advance(iter, idx);
-        //return &(*iter);
     }
 
     Value Field::Delete(size_t idx)
@@ -263,7 +256,11 @@ namespace CompactProtobuf
         int field_id = field_descriptor->number();
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end()) return 0;
-        else return iter->second.values.size();
+        else
+        {
+            TryDecodeField(&iter->second, field_descriptor);
+            return iter->second.values.size();
+        }
     }
 
     void Message::SetInteger(const string& name, size_t idx, uint32_t low, uint32_t hi)
@@ -286,6 +283,7 @@ namespace CompactProtobuf
             struct Value v;
             Helper::SetInteger(&v, field_descriptor->type(), val);
             field.Append(v);
+            fields_.insert(std::make_pair(field_id, field));
         }
         else
         {
@@ -316,6 +314,7 @@ namespace CompactProtobuf
             struct Value v;
             Helper::SetReal(&v, field_descriptor->type(), val);
             field.Append(v);
+            fields_.insert(std::make_pair(field_id, field));
         }
         else
         {
@@ -346,6 +345,7 @@ namespace CompactProtobuf
             struct Value v;
             Helper::SetString(&v, field_descriptor->type(), val);
             field.Append(v);
+            fields_.insert(std::make_pair(field_id, field));
         }
         else
         {

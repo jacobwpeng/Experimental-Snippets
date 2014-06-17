@@ -13,6 +13,7 @@
 #include "protobuf_parser.h"
 
 #include <cassert>
+#include <cstdio>
 
 namespace CompactProtobuf
 {
@@ -56,7 +57,7 @@ namespace CompactProtobuf
             const unsigned kMaxVarintLength = 10u;        /* for maximum (u)int64 */
             unsigned len = 1;
             uint64_t val = 0;
-            while (cur < state->slice.end and len < kMaxVarintLength)
+            while (cur < state->slice.end and len <= kMaxVarintLength)
             {
                 uint64_t part = Value(*cur);
                 part <<= ((len-1) * 7);

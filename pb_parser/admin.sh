@@ -24,7 +24,7 @@ function DoMake
 
 function DoRebuild
 {
-    mkdir -p build/ && cd build/ && cmake .. -DCMAKE_BUILD_TYPE=release && make -j4
+    mkdir -p build/ && cd build/ && cmake .. -DCMAKE_BUILD_TYPE=debug && make VERBOSE=1 -j4
 }
 
 #function DoClean

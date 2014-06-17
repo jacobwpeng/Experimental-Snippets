@@ -197,17 +197,85 @@ namespace CompactProtobuf
             state.pos = 0;
 
             unsigned idx = 0;
+            ProtobufParser::ParserStatus status;
             while (state.slice.start + state.pos < state.slice.end)
             {
-                ProtobufParser::ParserStatus status = ParseVarint(&state);
-                if (status != ProtobufParser::kOk) return false;
-                if (idx == 0) field->value()->decoded.primitive.varint = state.v.decoded.primitive.varint;
-                else
+                switch (field->field_descriptor->type())
                 {
-                    struct Value v;
-                    v.decoded.primitive.varint = state.v.decoded.primitive.varint;
-                    field->Append(v);
+                    case FieldDescriptor::TYPE_SINT32:
+                    case FieldDescriptor::TYPE_SINT64:
+                        status = ParseVarint(&state);
+                        if (status != ProtobufParser::kOk) return false;
+                        ZigzagDecode(&state.v.decoded.primitive.varint);
+                        if (idx == 0)
+                        {
+                            field->value()->decoded.primitive.varint = state.v.decoded.primitive.varint;
+                        }
+                        else
+                        {
+                            struct Value v;
+                            v.decoded.primitive.varint = state.v.decoded.primitive.varint;
+                            field->Append(v);
+                        }
+                        break;
+
+                    case FieldDescriptor::TYPE_INT32:
+                    case FieldDescriptor::TYPE_UINT32:
+                    case FieldDescriptor::TYPE_BOOL:
+                    case FieldDescriptor::TYPE_ENUM:
+                    case FieldDescriptor::TYPE_INT64:
+                    case FieldDescriptor::TYPE_UINT64:
+                        status = ParseVarint(&state);
+                        if (status != ProtobufParser::kOk) return false;
+                        if (idx == 0)
+                        {
+                            field->value()->decoded.primitive.varint = state.v.decoded.primitive.varint;
+                        }
+                        else
+                        {
+                            struct Value v;
+                            v.decoded.primitive.varint = state.v.decoded.primitive.varint;
+                            field->Append(v);
+                        }
+                        break;
+
+                    case FieldDescriptor::TYPE_FIXED32:
+                    case FieldDescriptor::TYPE_SFIXED32:
+                    case FieldDescriptor::TYPE_FLOAT:
+                        status = Parse32Bits(&state);
+                        if (status != ProtobufParser::kOk) return false;
+                        if (idx == 0)
+                        {
+                            field->value()->decoded.primitive.f.u = state.v.decoded.primitive.f.u;
+                        }
+                        else
+                        {
+                            struct Value v;
+                            v.decoded.primitive.f.u = state.v.decoded.primitive.f.u;
+                            field->Append(v);
+                        }
+                        break;
+
+                    case FieldDescriptor::TYPE_FIXED64:
+                    case FieldDescriptor::TYPE_SFIXED64:
+                    case FieldDescriptor::TYPE_DOUBLE:
+                        status = Parse64Bits(&state);
+                        if (status != ProtobufParser::kOk) return false;
+                        if (idx == 0)
+                        {
+                            field->value()->decoded.primitive.d.u = state.v.decoded.primitive.d.u;
+                        }
+                        else
+                        {
+                            struct Value v;
+                            v.decoded.primitive.d.u = state.v.decoded.primitive.d.u;
+                            field->Append(v);
+                        }
+                        break;
+                    default:
+                        assert (false);         /* invalid packed type */
                 }
+                ++idx;
             }
 
             field->decoded = true;
@@ -237,17 +305,11 @@ namespace CompactProtobuf
 
             BOOST_FOREACH(struct Value& value, field->values)
             {
-                if (field->field_descriptor->type() == FieldDescriptor::TYPE_SINT32 
-                        or field->field_descriptor->type() == FieldDescriptor::TYPE_SFIXED32)
+                if (field->field_descriptor->type() == FieldDescriptor::TYPE_SINT32
+                        or field->field_descriptor->type() == FieldDescriptor::TYPE_SINT64
+                    )
                 {
-                    uint32_t val = static_cast<uint32_t>(value.decoded.primitive.varint);
-                    value.decoded.primitive.varint = (val & 0x1) == 0 ? (val >> 1) : -(val >> 1) - 1;
-                }
-                else if (field->field_descriptor->type() == FieldDescriptor::TYPE_SINT64
-                        or field->field_descriptor->type() == FieldDescriptor::TYPE_SFIXED64)
-                {
-                    uint64_t val = value.decoded.primitive.varint;
-                    value.decoded.primitive.varint = (val & 0x1) == 0 ? (val >> 1) : -(val >> 1) - 1;
+                    ZigzagDecode( &value.decoded.primitive.varint );
                 }
                 else 
                 { 
@@ -359,13 +421,13 @@ namespace CompactProtobuf
             assert (idx < field.values.size());
             switch (field.field_descriptor->type())
             {
-                case FieldDescriptor::TYPE_SINT32:
                 case FieldDescriptor::TYPE_INT32:
                 case FieldDescriptor::TYPE_UINT32:
                 case FieldDescriptor::TYPE_BOOL:
                 case FieldDescriptor::TYPE_ENUM:
                 case FieldDescriptor::TYPE_INT64:
                 case FieldDescriptor::TYPE_UINT64:
+                case FieldDescriptor::TYPE_SINT32:
                 case FieldDescriptor::TYPE_SINT64:
                     return field.value(idx)->decoded.primitive.varint;
 
@@ -417,7 +479,7 @@ namespace CompactProtobuf
                     value->decoded.primitive.f.f = val;
                     break;
                 case FieldDescriptor::TYPE_DOUBLE:
-                    value->decoded.primitive.d.u = val;
+                    value->decoded.primitive.d.d = val;
                     break;
                 default:
                     assert (false);
@@ -501,6 +563,11 @@ namespace CompactProtobuf
                     assert (false);
                     return kVarint;
             }
+        }
+
+        void ZigzagDecode(uint64_t * val)
+        {
+            *val  = (*val & 0x1) == 0 ? (*val >> 1) : -(*val >> 1) - 1;
         }
     }
 }

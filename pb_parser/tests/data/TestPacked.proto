@@ -1,0 +1,16 @@
+message Packed
+{
+    repeated int32 i32 = 1       [packed = true];
+    repeated int64 i64 = 2       [packed = true];
+    repeated sint32 s32 = 3      [packed = true];
+    repeated sint64 s64 = 4      [packed = true];
+    repeated uint32 u32 = 5      [packed = true];
+    repeated uint64 u64 = 6      [packed = true];
+    repeated fixed32 f32 = 7     [packed = true];
+    repeated fixed64 f64 = 8     [packed = true];
+    repeated sfixed32 sf32 = 9   [packed = true];
+    repeated sfixed64 sf64 = 10  [packed = true];
+    repeated float f = 11        [packed = true];
+    repeated double d = 12       [packed = true];
+    repeated bool b = 13         [packed = true];
+}

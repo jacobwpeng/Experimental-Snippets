@@ -15,9 +15,11 @@
 #include <cassert>
 #include <vector>
 #include <boost/bind.hpp>
+#include <boost/make_shared.hpp>
 
 #include "compact_protobuf.h"
 #include "protobuf_helper.h"
+#include "protobuf_parser.h"
 
 #include "benchmark.h"
 #include "userinfo.pb.h"
@@ -84,6 +86,7 @@ void TestDynamicProtobuf(benchmark::BenchmarkState& state, const CompactProtobuf
     using CompactProtobuf::Message;
     for (int x = 0; x != state.max_x; ++x)
     {
+        //TRACE_TIME_CONSUME;
         const CompactProtobuf::Descriptor * descriptor = env.FindMessageTypeByName("petlib.HFPBUserInfo");
         CompactProtobuf::Message message(descriptor);
         message.FromString(encoded);
@@ -152,6 +155,16 @@ void TestPbc(benchmark::BenchmarkState& state, struct pbc_env * env, const Compa
     }
 }
 
+void TestAppendValue(benchmark::BenchmarkState& state)
+{
+    CompactProtobuf::Field field;
+    for (int x = 0; x != state.max_x; ++x)
+    {
+        CompactProtobuf::Value v;
+        field.Append (v);
+    }
+}
+
 int main(int argc, char* argv[])
 {
     if (argc != 3) return -1;
@@ -178,11 +191,12 @@ int main(int argc, char* argv[])
 
     string encoded(reinterpret_cast<char*>(slice.start), slice.end - slice.start);
 
-    const size_t kMaxTimes = 1 << 12;
-    benchmark::AddBench("Static", 50, kMaxTimes, 0, 0, boost::bind(TestStaticProtobuf, _1, encoded), NULL, NULL);
-    benchmark::AddBench("Reflection", 50, kMaxTimes, 0, 0, boost::bind(TestProtobufReflection, _1, encoded), NULL, NULL);
+    const size_t kMaxTimes = 1 << 8;
+    //benchmark::AddBench("Static", 50, kMaxTimes, 0, 0, boost::bind(TestStaticProtobuf, _1, encoded), NULL, NULL);
+    //benchmark::AddBench("Reflection", 50, kMaxTimes, 0, 0, boost::bind(TestProtobufReflection, _1, encoded), NULL, NULL);
     benchmark::AddBench("Dynamic", 50, kMaxTimes, 0, 0, boost::bind(TestDynamicProtobuf, _1, boost::ref(env), encoded), NULL, NULL);
-    benchmark::AddBench("PBC", 50, kMaxTimes, 0, 0, boost::bind(TestPbc, _1, cenv, slice), NULL, NULL);
+    benchmark::AddBench("AppendValue", 50, 1024, 0, 0, TestAppendValue, NULL, NULL);
+    //benchmark::AddBench("PBC", 50, kMaxTimes, 0, 0, boost::bind(TestPbc, _1, cenv, slice), NULL, NULL);
     benchmark::ExecuteAll();
 
     delete [] slice.start;

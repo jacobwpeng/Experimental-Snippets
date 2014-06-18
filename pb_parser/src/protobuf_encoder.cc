@@ -259,9 +259,12 @@ namespace CompactProtobuf
                 case FieldDescriptor::TYPE_INT64:
                 case FieldDescriptor::TYPE_UINT32:
                 case FieldDescriptor::TYPE_UINT64:
-                case FieldDescriptor::TYPE_BOOL:
                 case FieldDescriptor::TYPE_ENUM:
                     val = value.decoded.primitive.varint;
+                    EncodeVarint(val, buf);
+                    break;
+                case FieldDescriptor::TYPE_BOOL:
+                    val = value.decoded.primitive.varint == 0 ? 0 : 1;
                     EncodeVarint(val, buf);
                     break;
                 default:

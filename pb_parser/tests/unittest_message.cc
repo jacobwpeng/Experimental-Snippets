@@ -171,6 +171,7 @@ class MessageTest : public ::testing::Test
                 FILL_REPEATED_DATA(message_, "s", string_list_, String);
                 FILL_REPEATED_DATA(message_, "d", double_list_, Double);
                 FILL_REPEATED_DATA(message_, "f", float_list_, Float);
+                FILL_REPEATED_DATA(message_, "b", int32_list_, Bool);
 
                 ref = packed_.GetReflection();
                 descriptor = packed_.GetDescriptor();
@@ -186,6 +187,7 @@ class MessageTest : public ::testing::Test
 
                 FILL_REPEATED_DATA(&packed_, "d", double_list_, Double);
                 FILL_REPEATED_DATA(&packed_, "f", float_list_, Float);
+                FILL_REPEATED_DATA(&packed_, "b", int32_list_, Bool);
             }
 #undef FILL_DATA
 
@@ -242,6 +244,14 @@ class MessageTest : public ::testing::Test
             CHECK_VALUE("d", Real, double_list_);
             CHECK_VALUE("f", Real, float_list_);
 #undef CHECK_VALUE
+
+            {
+                ASSERT_EQ (compact_message.GetFieldSize("b"), int32_list_.size());
+                for (size_t i = 0; i != compact_message.GetFieldSize("b"); ++i)
+                {
+                    EXPECT_EQ (static_cast<bool>(compact_message.GetInteger("b", i, NULL)), int32_list_[i] != 0);
+                }
+            }
         }
 
         CompactProtobuf::Environment env_;
@@ -314,7 +324,7 @@ TEST_F(MessageTest, Test_has_field)
     EXPECT_TRUE (all.has_field("s"));
     EXPECT_TRUE (all.has_field("d"));
     EXPECT_TRUE (all.has_field("f"));
-    EXPECT_FALSE (all.has_field("b"));
+    EXPECT_TRUE (all.has_field("b"));
     EXPECT_FALSE (all.has_field("foo"));
 }
 

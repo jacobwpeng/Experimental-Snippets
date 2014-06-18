@@ -466,6 +466,7 @@ namespace CompactProtobuf
                 case FieldDescriptor::TYPE_FIXED64:
                 case FieldDescriptor::TYPE_SFIXED64:
                     value->decoded.primitive.d.u = val;
+                    break;
                 default:
                     assert(false);
             }

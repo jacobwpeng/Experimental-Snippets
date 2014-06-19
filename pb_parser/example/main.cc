@@ -104,9 +104,11 @@ void TestDynamicProtobuf(benchmark::BenchmarkState& state, const CompactProtobuf
     }
 
     //printf("Field copied %d times\n", Field::times);
-    printf("Value copied %d times\n", Value::times);
-
-    Value::times = 0;
+    if (Value::copied_times != 0)
+    {
+        printf("Value copied %d times\n", Value::copied_times);
+        Value::copied_times = 0;
+    }
 }
 
 void TestProtobufReflection(benchmark::BenchmarkState& state, const string& encoded)
@@ -166,7 +168,7 @@ void TestAppendValue(benchmark::BenchmarkState& state)
     for (int x = 0; x != state.max_x; ++x)
     {
         CompactProtobuf::Value v;
-        field.Append (v);
+        field.FastAppend (v);
     }
 }
 
@@ -196,7 +198,7 @@ int main(int argc, char* argv[])
 
     string encoded(reinterpret_cast<char*>(slice.start), slice.end - slice.start);
 
-    const size_t kMaxTimes = 1 << 8;
+    const size_t kMaxTimes = 1 << 10;
     //benchmark::AddBench("Static", 50, kMaxTimes, 0, 0, boost::bind(TestStaticProtobuf, _1, encoded), NULL, NULL);
     //benchmark::AddBench("Reflection", 50, kMaxTimes, 0, 0, boost::bind(TestProtobufReflection, _1, encoded), NULL, NULL);
     benchmark::AddBench("Dynamic", 50, kMaxTimes, 0, 0, boost::bind(TestDynamicProtobuf, _1, boost::ref(env), encoded), NULL, NULL);

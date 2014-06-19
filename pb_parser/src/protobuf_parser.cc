@@ -34,7 +34,7 @@ namespace CompactProtobuf
             return byte & 0x80;
         }
 
-        uint64_t Value(Byte byte)
+        uint64_t GetValue(Byte byte)
         {
             return byte & 0x7f;
         }
@@ -59,7 +59,7 @@ namespace CompactProtobuf
             uint64_t val = 0;
             while (cur < state->slice.end and len <= kMaxVarintLength)
             {
-                uint64_t part = Value(*cur);
+                uint64_t part = GetValue(*cur);
                 part <<= ((len-1) * 7);
                 val |= part;
                 if (not More(*cur)) break;

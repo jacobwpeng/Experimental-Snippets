@@ -20,6 +20,7 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/noncopyable.hpp>
+#include <boost/ptr_container/ptr_vector.hpp>
 #include <boost/ptr_container/ptr_map.hpp>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/descriptor_database.h>
@@ -40,10 +41,12 @@ namespace CompactProtobuf
     using google::protobuf::FileDescriptorSet;
     using google::protobuf::FileDescriptorProto;
 
+    struct Value;
     struct Field;
     class Message;
     typedef boost::ptr_map<int, Field> FieldMap;
     typedef boost::shared_ptr<Message> MessagePtr;
+    typedef boost::shared_ptr<Value> ValuePtr;
 
     struct Slice
     {
@@ -86,12 +89,12 @@ namespace CompactProtobuf
             string s;
         } decoded;
 
-        static int times;
-        Value(){}
-        Value(const Value& rhs) { ++Value::times; encoded = rhs.encoded; decoded = rhs.decoded;}
+        Value();
+        Value(const Value& rhs);
+        static int copied_times;
     };
 
-    typedef vector<Value> ValueList;
+    typedef boost::ptr_vector<Value> ValueList;
     struct Field : boost::noncopyable
     {
         bool decoded;
@@ -105,8 +108,8 @@ namespace CompactProtobuf
         Value * value();
         Value * value(size_t idx);
         const Value * value(size_t idx) const;
-        Value Delete(size_t idx);
-        void Append(const Value& value);
+        ValuePtr Delete(size_t idx);
+        void FastAppend(const Value& value);
         void Append(Value * value);
     };
 

@@ -48,26 +48,46 @@ namespace CompactProtobuf
         return &values[idx];
     }
 
-    Value Field::Delete(size_t idx)
+    ValuePtr Field::Delete(size_t idx)
     {
         assert (values.size() > idx);
         ValueList::iterator iter = values.begin();
         std::advance(iter, idx);
-        struct Value v = *iter;
+        ValuePtr v(new Value);
+        //v.CopyFrom(iter);
+        //struct Value v = *iter;
         values.erase(iter);
         return v;
     }
 
-    void Field::Append(const Value& value)
+    void Field::FastAppend(const Value& value)
     {
-        values.push_back(value);
+        Value * v = new Value;
+        v->encoded = value.encoded;
+        if (wire_type == kLengthDelimited)
+        {
+            v->decoded.primitive.len = value.decoded.primitive.len;
+        }
+        Append(v);
     }
 
     void Field::Append(Value * value)
     {
+        values.push_back(value);
     }
 
-    int Value::times = 0;
+    Value::Value()
+    {
+    }
+
+    Value::Value(const Value& rhs)
+    {
+        encoded = rhs.encoded;
+        decoded = rhs.decoded;
+        ++Value::copied_times;
+    }
+
+    int Value::copied_times = 0;
     /*-----------------------------------------------------------------------------
      *  Environment
      *-----------------------------------------------------------------------------*/
@@ -298,8 +318,8 @@ namespace CompactProtobuf
         if (iter == fields_.end())              /* field no found */
         {
             Field * field = AddKnownField(field_id, field_descriptor);
-            struct Value v;
-            Helper::SetInteger(&v, field_descriptor->type(), val);
+            Value * v = new Value;
+            Helper::SetInteger(v, field_descriptor->type(), val);
             field->Append(v);
         }
         else
@@ -323,8 +343,8 @@ namespace CompactProtobuf
         if (iter == fields_.end())              /* field no found */
         {
             Field * field = AddKnownField(field_id, field_descriptor);
-            struct Value v;
-            Helper::SetReal(&v, field_descriptor->type(), val);
+            Value * v = new Value;
+            Helper::SetReal(v, field_descriptor->type(), val);
             field->Append(v);
         }
         else
@@ -348,8 +368,8 @@ namespace CompactProtobuf
         if (iter == fields_.end())              /* field no found */
         {
             Field * field = AddKnownField(field_id, field_descriptor);
-            struct Value v;
-            Helper::SetString(&v, field_descriptor->type(), val);
+            Value * v = new Value;
+            Helper::SetString(v, field_descriptor->type(), val);
             field->Append(v);
         }
         else
@@ -395,8 +415,8 @@ namespace CompactProtobuf
         if (iter == fields_.end())              /* field no found */
         {
             Field * field = AddKnownField(field_id, field_descriptor);
-            struct Value v;
-            Helper::SetInteger(&v, field_descriptor->type(), val);
+            Value * v = new Value;
+            Helper::SetInteger(v, field_descriptor->type(), val);
             field->Append(v);
         }
         else if (not field_descriptor->is_repeated())
@@ -410,8 +430,8 @@ namespace CompactProtobuf
             TryDecodeField(field, field_descriptor);
 
             assert (field->decoded);
-            struct Value v;
-            Helper::SetInteger(&v, field_descriptor->type(), val);
+            Value * v = new Value;
+            Helper::SetInteger(v, field_descriptor->type(), val);
             field->Append(v);
         }
     }
@@ -425,8 +445,8 @@ namespace CompactProtobuf
         if (iter == fields_.end())              /* field no found */
         {
             Field * field = AddKnownField(field_id, field_descriptor);
-            struct Value v;
-            Helper::SetReal(&v, field_descriptor->type(), val);
+            Value * v = new Value;
+            Helper::SetReal(v, field_descriptor->type(), val);
             field->Append(v);
         }
         else if (not field_descriptor->is_repeated())
@@ -440,8 +460,8 @@ namespace CompactProtobuf
             TryDecodeField(field, field_descriptor);
 
             assert (field->decoded);
-            struct Value v;
-            Helper::SetReal(&v, field_descriptor->type(), val);
+            Value * v = new Value;
+            Helper::SetReal(v, field_descriptor->type(), val);
             field->Append(v);
         }
     }
@@ -455,8 +475,8 @@ namespace CompactProtobuf
         if (iter == fields_.end())              /* field no found */
         {
             Field * field = AddKnownField(field_id, field_descriptor);
-            struct Value v;
-            Helper::SetString(&v, field_descriptor->type(), val);
+            Value * v = new Value;
+            Helper::SetString(v, field_descriptor->type(), val);
             field->Append(v);
         }
         else if (not field_descriptor->is_repeated())
@@ -470,8 +490,8 @@ namespace CompactProtobuf
             TryDecodeField(field, field_descriptor);
 
             assert (field->decoded);
-            struct Value v;
-            Helper::SetString(&v, field_descriptor->type(), val);
+            Value * v = new Value;
+            Helper::SetString(v, field_descriptor->type(), val);
             field->Append(v);
         }
     }
@@ -532,7 +552,7 @@ namespace CompactProtobuf
 
         assert (field->decoded);
         if (not field_descriptor->is_repeated()) idx = 0;
-        double val = field->Delete(idx).decoded.primitive.d.d;
+        double val = field->Delete(idx)->decoded.primitive.d.d;
         if (not field->has_value()) fields_.erase( fields_.find(field->id) );
         return val;
     }
@@ -550,7 +570,7 @@ namespace CompactProtobuf
 
         assert (field->decoded);
         if (not field_descriptor->is_repeated()) idx = 0;
-        string val = field->Delete(idx).decoded.s;
+        string val = field->Delete(idx)->decoded.s;
         if (not field->has_value()) fields_.erase( fields_.find(field->id) );
         return val;
     }
@@ -568,7 +588,7 @@ namespace CompactProtobuf
 
         assert (field->decoded);
         if (not field_descriptor->is_repeated()) idx = 0;
-        MessagePtr val = field->Delete(idx).decoded.m;
+        MessagePtr val = field->Delete(idx)->decoded.m;
         if (not field->has_value()) fields_.erase( fields_.find(field->id) );
         return val;
     }
@@ -658,8 +678,8 @@ namespace CompactProtobuf
     {
         MessagePtr embedded_message = Helper::MakeMessage(field_descriptor);
 
-        struct Value v;
-        v.decoded.m = embedded_message;
+        Value * v = new Value;
+        v->decoded.m = embedded_message;
         field->Append(v);
         return embedded_message.get();
     }

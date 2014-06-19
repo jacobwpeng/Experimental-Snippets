@@ -92,8 +92,8 @@ namespace CompactProtobuf
                     const FieldDescriptor* field_descriptor = descriptor->FindFieldByNumber(field->id);
                     field->unknown = (field_descriptor == NULL);
                     field->wire_type = state.wire_type;
-                    field->Append(state.v);
                     field->field_descriptor = field_descriptor;
+                    field->FastAppend(state.v);
                     fields->insert(field->id, field);
                 }
                 else
@@ -103,13 +103,15 @@ namespace CompactProtobuf
                     if (field.unknown or field.field_descriptor->label() == FieldDescriptor::LABEL_REPEATED)
                     {
                         /* unknown field or repeated field, both we save all entry*/
-                        field.Append(state.v);
+                        field.FastAppend(state.v);
                     }
                     else
                     {
                         /* for optional or required field, we only save the new one */
                         assert (field.values.size() == 1);
-                        *field.value(0) = state.v; /* replace with the new one */
+                        field.values.clear();
+                        field.FastAppend(state.v);
+                        //*field.value(0) = state.v; /* replace with the new one */
                     }
                 }
             }
@@ -213,8 +215,8 @@ namespace CompactProtobuf
                         }
                         else
                         {
-                            struct Value v;
-                            v.decoded.primitive.varint = state.v.decoded.primitive.varint;
+                            Value * v = new Value;
+                            v->decoded.primitive.varint = state.v.decoded.primitive.varint;
                             field->Append(v);
                         }
                         break;
@@ -233,8 +235,8 @@ namespace CompactProtobuf
                         }
                         else
                         {
-                            struct Value v;
-                            v.decoded.primitive.varint = state.v.decoded.primitive.varint;
+                            Value * v = new Value;
+                            v->decoded.primitive.varint = state.v.decoded.primitive.varint;
                             field->Append(v);
                         }
                         break;
@@ -250,8 +252,8 @@ namespace CompactProtobuf
                         }
                         else
                         {
-                            struct Value v;
-                            v.decoded.primitive.f.u = state.v.decoded.primitive.f.u;
+                            Value * v = new Value;
+                            v->decoded.primitive.f.u = state.v.decoded.primitive.f.u;
                             field->Append(v);
                         }
                         break;
@@ -267,8 +269,8 @@ namespace CompactProtobuf
                         }
                         else
                         {
-                            struct Value v;
-                            v.decoded.primitive.d.u = state.v.decoded.primitive.d.u;
+                            Value * v = new Value;
+                            v->decoded.primitive.d.u = state.v.decoded.primitive.d.u;
                             field->Append(v);
                         }
                         break;

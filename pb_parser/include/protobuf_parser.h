@@ -40,7 +40,7 @@ namespace CompactProtobuf
         int GetFieldId(uint64_t val);      /* tag is a varint in range [0, (1<<29)-1] */
         WireType GetWireType(uint64_t val);
         bool More(Byte byte);
-        uint64_t Value(Byte byte);              /* return uint64_t for bit operation */
+        uint64_t GetValue(Byte byte);              /* return uint64_t for bit operation */
 
         ParserStatus ParseTag(ParserState* state);
         ParserStatus ParseVarintInternal(ParserState* state, unsigned* plen);

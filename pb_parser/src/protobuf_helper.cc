@@ -85,20 +85,20 @@ namespace CompactProtobuf
                 if (iter == fields->end())
                 {
                     /* no entry for this field id */
-                    Field field;
-                    field.decoded = false;
-                    field.id = state.field_id;
+                    Field * field = new Field;
+                    field->decoded = false;
+                    field->id = state.field_id;
 
-                    const FieldDescriptor* field_descriptor = descriptor->FindFieldByNumber(field.id);
-                    field.unknown = (field_descriptor == NULL);
-                    field.wire_type = state.wire_type;
-                    field.Append(state.v);
-                    field.field_descriptor = field_descriptor;
-                    fields->insert(std::make_pair(field.id, field));
+                    const FieldDescriptor* field_descriptor = descriptor->FindFieldByNumber(field->id);
+                    field->unknown = (field_descriptor == NULL);
+                    field->wire_type = state.wire_type;
+                    field->Append(state.v);
+                    field->field_descriptor = field_descriptor;
+                    fields->insert(field->id, field);
                 }
                 else
                 {
-                    Field & field = iter->second;
+                    Field & field = *iter->second;
                     /* we already got a entry for this field */
                     if (field.unknown or field.field_descriptor->label() == FieldDescriptor::LABEL_REPEATED)
                     {

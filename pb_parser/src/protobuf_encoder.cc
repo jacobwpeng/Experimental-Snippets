@@ -131,40 +131,40 @@ namespace CompactProtobuf
         bool EncodeMessage(const FieldMap& fields, const FieldMap* unknown_fields, EncoderBuffer* buf)
         {
             assert (buf);
-            BOOST_FOREACH(const FieldMap::value_type & p, fields)
+            for (FieldMap::const_iterator iter = fields.begin(); iter != fields.end(); ++iter)
             {
-                const Field& field = p.second;
-                uint32_t tag = field.id;
+                const Field* field = iter->second;
+                uint32_t tag = field->id;
                 tag <<= 3;
-                tag |= static_cast<uint8_t>(field.wire_type);
+                tag |= static_cast<uint8_t>(field->wire_type);
                 EncoderBuffer tag_buf;
                 EncodeVarint(tag, &tag_buf);
 
-                if (not field.decoded)
+                if (not field->decoded)
                 {
-                    BOOST_FOREACH(const struct Value& value, field.values)
+                    BOOST_FOREACH(const struct Value& value, field->values)
                     {
                         buf->Append(tag_buf);
                         buf->Append(value.encoded);
                     }
                 }
-                else if (field.wire_type == kLengthDelimited)
+                else if (field->wire_type == kLengthDelimited)
                 {
-                    if (field.field_descriptor->is_packed())
+                    if (field->field_descriptor->is_packed())
                     {
                         /* repeated packed */
                         EncoderBuffer packed;
-                        EncodePackedField(field, &packed);
+                        EncodePackedField(*field, &packed);
                         EncoderBuffer len_buf;
                         EncodeVarint(packed.size(), &len_buf);
                         buf->Append(tag_buf);   /* tag */
                         buf->Append(len_buf);   /* length */
                         buf->Append(packed);    /* data */
                     }
-                    else if (field.field_descriptor->type() == FieldDescriptor::TYPE_MESSAGE)
+                    else if (field->field_descriptor->type() == FieldDescriptor::TYPE_MESSAGE)
                     {
                         /* message */
-                        BOOST_FOREACH(const struct Value& value, field.values)
+                        BOOST_FOREACH(const struct Value& value, field->values)
                         {
                             const Message* message = value.decoded.m.get();
                             EncoderBuffer tmp;
@@ -180,7 +180,7 @@ namespace CompactProtobuf
                     else
                     {
                         /* string/bytes */
-                        BOOST_FOREACH(const struct Value& value, field.values)
+                        BOOST_FOREACH(const struct Value& value, field->values)
                         {
                             EncoderBuffer len_buf;
                             EncodeVarint(value.decoded.s.size(), &len_buf);
@@ -190,28 +190,28 @@ namespace CompactProtobuf
                         }
                     }
                 }
-                else if (field.wire_type == kVarint)
+                else if (field->wire_type == kVarint)
                 {
                     /* varint */
-                    BOOST_FOREACH(const struct Value& value, field.values)
+                    BOOST_FOREACH(const struct Value& value, field->values)
                     {
                         buf->Append(tag_buf);
-                        EncodeVarint(value, field.field_descriptor->type(), buf);
+                        EncodeVarint(value, field->field_descriptor->type(), buf);
                     }
                 }
-                else if (field.wire_type == k64Bits)
+                else if (field->wire_type == k64Bits)
                 {
                     /* fixed 64 bits */
-                    BOOST_FOREACH(const struct Value& value, field.values)
+                    BOOST_FOREACH(const struct Value& value, field->values)
                     {
                         buf->Append(tag_buf);
                         Encode64Bit(value, buf);
                     }
                 }
-                else if (field.wire_type == k32Bits)
+                else if (field->wire_type == k32Bits)
                 {
                     /* fixed 32 bits */
-                    BOOST_FOREACH(const struct Value& value, field.values)
+                    BOOST_FOREACH(const struct Value& value, field->values)
                     {
                         buf->Append(tag_buf);
                         Encode32Bit(value, buf);
@@ -219,23 +219,23 @@ namespace CompactProtobuf
                 }
                 else
                 {
-                    fprintf(stderr, "invalid wire_type: %d\n", field.wire_type);
+                    fprintf(stderr, "invalid wire_type: %d\n", field->wire_type);
                     assert (false);
                 }
             }
 
             if (unknown_fields)
             {
-                BOOST_FOREACH(const FieldMap::value_type & p, *unknown_fields)
+                for (FieldMap::const_iterator iter = unknown_fields->begin(); iter != unknown_fields->end(); ++iter)
                 {
-                    const Field& field = p.second;
-                    uint32_t tag = field.id;
+                    const Field* field = iter->second;
+                    uint32_t tag = field->id;
                     tag <<= 3;
-                    tag |= static_cast<uint8_t>(field.wire_type);
+                    tag |= static_cast<uint8_t>(field->wire_type);
                     EncoderBuffer tag_buf;
                     EncodeVarint(tag, &tag_buf);
                     
-                    BOOST_FOREACH(const struct Value& value, field.values)
+                    BOOST_FOREACH(const struct Value& value, field->values)
                     {
                         buf->Append(tag_buf);
                         buf->Append(value.encoded);

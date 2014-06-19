@@ -62,6 +62,12 @@ namespace CompactProtobuf
     {
         values.push_back(value);
     }
+
+    void Field::Append(Value * value)
+    {
+    }
+
+    int Value::times = 0;
     /*-----------------------------------------------------------------------------
      *  Environment
      *-----------------------------------------------------------------------------*/
@@ -109,20 +115,21 @@ namespace CompactProtobuf
         bool ok = Helper::ParseMessageLazy(slice, descriptor_, &fields_);
         if (not ok) return false;
 
+        vector<int> unknown_keys;
         for (FieldMap::const_iterator iter = fields_.begin(); iter != fields_.end(); ++iter)
         {
-            if (not iter->second.unknown) continue;
+            if (not iter->second->unknown) continue;
 
             if (not unknown_fields_) unknown_fields_.reset(new FieldMap);
 
-            unknown_fields_->insert(*iter);
+            unknown_keys.push_back (iter->first);
         }
 
         if (unknown_fields_)
         {
-            for (FieldMap::const_iterator iter = unknown_fields_->begin(); iter != unknown_fields_->end(); ++iter)
+            BOOST_FOREACH (int key, unknown_keys)
             {
-                fields_.erase(iter->first);
+                unknown_fields_->transfer (fields_.find(key), fields_);
             }
         }
         return true;
@@ -159,30 +166,46 @@ namespace CompactProtobuf
     void Message::Clear()
     {
         /* clear everything except unknwon fields in this message and all embedded messages*/
-        FieldMap left_fields;
-        BOOST_FOREACH(FieldMap::value_type & p, fields_)
+        vector<int> left_keys;
+        for (FieldMap::iterator iter = fields_.begin(); iter != fields_.end(); ++iter)
         {
-            Field& field = p.second;
-            if (field.field_descriptor->type() == FieldDescriptor::TYPE_MESSAGE)
+            Field * field = iter->second;
+            if (field->field_descriptor->type() == FieldDescriptor::TYPE_MESSAGE)
             {
-                ValueList left_values;
-                BOOST_FOREACH(struct Value& value, field.values)
+                vector<MessagePtr> messages;
+                for (size_t idx = 0; idx != field->values.size(); ++idx)
                 {
+                    Value & value = field->values[idx];
                     MessagePtr & message = value.decoded.m;
                     message->Clear();
+
                     if (message->has_field() or message->has_unknown_field())
                     {
-                        left_values.push_back(value);
+                        /* save this value */
+                        messages.push_back(message);
                     }
                 }
-                if (not left_values.empty())
+                if (not messages.empty())
                 {
-                    p.second.values.swap(left_values);
-                    left_fields.insert(p);
+                    field->values.clear();
+                    for (size_t idx = 0; idx != messages.size(); ++idx)
+                    {
+                        Value * v = new Value;
+                        v->decoded.m = messages[idx];
+                        field->Append (v);
+                    }
+                    left_keys.push_back (iter->first);
                 }
             }
         }
-        fields_.swap(left_fields);
+        FieldMap left_fields;
+        BOOST_FOREACH (int key, left_keys)
+        {
+            bool ok = left_fields.transfer (fields_.find(key), fields_);
+            (void)ok;
+            assert (ok);
+        }
+        fields_.swap (left_fields);
     }
 
     uint32_t Message::GetInteger(const string& name, size_t idx, uint32_t * hi)
@@ -197,7 +220,7 @@ namespace CompactProtobuf
             return Helper::DecodeUInt64(default_value, hi);
         }
 
-        Field & field = iter->second;
+        Field & field = *iter->second;
 
         CheckValidIndex(field, field_descriptor, idx);
         TryDecodeField(&field, field_descriptor);
@@ -219,7 +242,7 @@ namespace CompactProtobuf
             return field_descriptor->default_value_string();
         }
 
-        Field & field = iter->second;
+        Field & field = *iter->second;
         CheckValidIndex(field, field_descriptor, idx);
         TryDecodeField(&field, field_descriptor);
 
@@ -239,7 +262,7 @@ namespace CompactProtobuf
             return Helper::DefaultRealValue(field_descriptor);
         }
 
-        Field & field = iter->second;
+        Field & field = *iter->second;
         CheckValidIndex(field, field_descriptor, idx);
         TryDecodeField(&field, field_descriptor);
 
@@ -258,8 +281,8 @@ namespace CompactProtobuf
         if (iter == fields_.end()) return 0;
         else
         {
-            TryDecodeField(&iter->second, field_descriptor);
-            return iter->second.values.size();
+            TryDecodeField(iter->second, field_descriptor);
+            return iter->second->values.size();
         }
     }
 
@@ -274,27 +297,21 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end())              /* field no found */
         {
-            Field field;
-            field.decoded = true;
-            field.unknown = false;
-            field.id = field_id;
-            field.wire_type = Helper::GetWireType(field_descriptor);
-            field.field_descriptor = field_descriptor;
+            Field * field = AddKnownField(field_id, field_descriptor);
             struct Value v;
             Helper::SetInteger(&v, field_descriptor->type(), val);
-            field.Append(v);
-            fields_.insert(std::make_pair(field_id, field));
+            field->Append(v);
         }
         else
         {
-            Field & field = iter->second;
+            Field * field = iter->second;
 
-            CheckValidIndex(field, field_descriptor, idx);
-            TryDecodeField(&field, field_descriptor);
+            CheckValidIndex(*field, field_descriptor, idx);
+            TryDecodeField(field, field_descriptor);
 
-            assert (field.decoded);
+            assert (field->decoded);
             if (not field_descriptor->is_repeated()) idx = 0;
-            Helper::SetInteger(field.value(idx), field_descriptor->type(), val);
+            Helper::SetInteger(field->value(idx), field_descriptor->type(), val);
         }
     }
 
@@ -305,27 +322,21 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end())              /* field no found */
         {
-            Field field;
-            field.decoded = true;
-            field.unknown = false;
-            field.id = field_id;
-            field.wire_type = Helper::GetWireType(field_descriptor);
-            field.field_descriptor = field_descriptor;
+            Field * field = AddKnownField(field_id, field_descriptor);
             struct Value v;
             Helper::SetReal(&v, field_descriptor->type(), val);
-            field.Append(v);
-            fields_.insert(std::make_pair(field_id, field));
+            field->Append(v);
         }
         else
         {
-            Field & field = iter->second;
+            Field * field = iter->second;
 
-            CheckValidIndex(field, field_descriptor, idx);
-            TryDecodeField(&field, field_descriptor);
+            CheckValidIndex(*field, field_descriptor, idx);
+            TryDecodeField(field, field_descriptor);
 
-            assert (field.decoded);
+            assert (field->decoded);
             if (not field_descriptor->is_repeated()) idx = 0;
-            Helper::SetReal(field.value(idx), field_descriptor->type(), val);
+            Helper::SetReal(field->value(idx), field_descriptor->type(), val);
         }
     }
 
@@ -336,27 +347,21 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end())              /* field no found */
         {
-            Field field;
-            field.decoded = true;
-            field.unknown = false;
-            field.id = field_id;
-            field.wire_type = Helper::GetWireType(field_descriptor);
-            field.field_descriptor = field_descriptor;
+            Field * field = AddKnownField(field_id, field_descriptor);
             struct Value v;
             Helper::SetString(&v, field_descriptor->type(), val);
-            field.Append(v);
-            fields_.insert(std::make_pair(field_id, field));
+            field->Append(v);
         }
         else
         {
-            Field & field = iter->second;
+            Field * field = iter->second;
 
-            CheckValidIndex(field, field_descriptor, idx);
-            TryDecodeField(&field, field_descriptor);
+            CheckValidIndex(*field, field_descriptor, idx);
+            TryDecodeField(field, field_descriptor);
 
-            assert (field.decoded);
+            assert (field->decoded);
             if (not field_descriptor->is_repeated()) idx = 0;
-            field.value(idx)->decoded.s = val;
+            field->value(idx)->decoded.s = val;
         }
 
     }
@@ -369,7 +374,7 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end()) return NULL;
 
-        Field & field = iter->second;
+        Field & field = *iter->second;
         CheckValidIndex(field, field_descriptor, idx);
         TryDecodeField(&field, field_descriptor);
 
@@ -389,16 +394,10 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end())              /* field no found */
         {
-            Field field;
-            field.decoded = true;
-            field.id = field_id;
-            field.unknown = false;
-            field.field_descriptor = field_descriptor;
-            field.wire_type = Helper::GetWireType(field_descriptor);
+            Field * field = AddKnownField(field_id, field_descriptor);
             struct Value v;
             Helper::SetInteger(&v, field_descriptor->type(), val);
-            field.Append(v);
-            fields_.insert(std::make_pair(field_id, field));
+            field->Append(v);
         }
         else if (not field_descriptor->is_repeated())
         {
@@ -407,13 +406,13 @@ namespace CompactProtobuf
         }
         else
         {
-            Field & field = iter->second;
-            TryDecodeField(&field, field_descriptor);
+            Field * field = iter->second;
+            TryDecodeField(field, field_descriptor);
 
-            assert (field.decoded);
+            assert (field->decoded);
             struct Value v;
             Helper::SetInteger(&v, field_descriptor->type(), val);
-            field.Append(v);
+            field->Append(v);
         }
     }
 
@@ -425,16 +424,10 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end())              /* field no found */
         {
-            Field field;
-            field.decoded = true;
-            field.id = field_id;
-            field.unknown = false;
-            field.field_descriptor = field_descriptor;
-            field.wire_type = Helper::GetWireType(field_descriptor);
+            Field * field = AddKnownField(field_id, field_descriptor);
             struct Value v;
             Helper::SetReal(&v, field_descriptor->type(), val);
-            field.Append(v);
-            fields_.insert(std::make_pair(field_id, field));
+            field->Append(v);
         }
         else if (not field_descriptor->is_repeated())
         {
@@ -443,13 +436,13 @@ namespace CompactProtobuf
         }
         else
         {
-            Field & field = iter->second;
-            TryDecodeField(&field, field_descriptor);
+            Field * field = iter->second;
+            TryDecodeField(field, field_descriptor);
 
-            assert (field.decoded);
+            assert (field->decoded);
             struct Value v;
             Helper::SetReal(&v, field_descriptor->type(), val);
-            field.Append(v);
+            field->Append(v);
         }
     }
 
@@ -461,16 +454,10 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end())              /* field no found */
         {
-            Field field;
-            field.decoded = true;
-            field.id = field_id;
-            field.unknown = false;
-            field.field_descriptor = field_descriptor;
-            field.wire_type = Helper::GetWireType(field_descriptor);
+            Field * field = AddKnownField(field_id, field_descriptor);
             struct Value v;
             Helper::SetString(&v, field_descriptor->type(), val);
-            field.Append(v);
-            fields_.insert(std::make_pair(field_id, field));
+            field->Append(v);
         }
         else if (not field_descriptor->is_repeated())
         {
@@ -479,13 +466,13 @@ namespace CompactProtobuf
         }
         else
         {
-            Field & field = iter->second;
-            TryDecodeField(&field, field_descriptor);
+            Field * field = iter->second;
+            TryDecodeField(field, field_descriptor);
 
-            assert (field.decoded);
+            assert (field->decoded);
             struct Value v;
             Helper::SetString(&v, field_descriptor->type(), val);
-            field.Append(v);
+            field->Append(v);
         }
     }
 
@@ -497,15 +484,8 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         if (iter == fields_.end())
         {
-            Field field;
-            field.decoded = true;
-            field.id = field_id;
-            field.unknown = false;
-            field.field_descriptor = field_descriptor;
-            field.wire_type = Helper::GetWireType(field_descriptor);
-
-            fields_.insert(std::make_pair(field_id, field));
-            return InternalAddMessage(&fields_[field_id], field_descriptor);
+            Field * field = AddKnownField(field_id, field_descriptor);
+            return InternalAddMessage(field, field_descriptor);
         }
 
         if (not field_descriptor->is_repeated())
@@ -513,11 +493,11 @@ namespace CompactProtobuf
             assert (false);                     /* use GetMessage */
         }
 
-        Field & field = iter->second;
-        TryDecodeField(&field, field_descriptor);
+        Field * field = iter->second;
+        TryDecodeField(field, field_descriptor);
 
-        assert (field.decoded);
-        return InternalAddMessage(&field, field_descriptor);
+        assert (field->decoded);
+        return InternalAddMessage(field, field_descriptor);
     }
 
     uint32_t Message::DeleteInteger(const string& name, size_t idx, uint32_t * hi)
@@ -527,15 +507,15 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         assert (iter != fields_.end());         /* field not found */
 
-        Field & field = iter->second;
-        CheckValidIndex(field, field_descriptor, idx);
-        TryDecodeField(&field, field_descriptor);
+        Field * field = iter->second;
+        CheckValidIndex(*field, field_descriptor, idx);
+        TryDecodeField(field, field_descriptor);
 
-        assert (field.decoded);
+        assert (field->decoded);
         if (not field_descriptor->is_repeated()) idx = 0;
-        uint64_t val = Helper::RetrieveIntegerValue(field, idx);
-        field.Delete(idx);
-        if (not field.has_value()) fields_.erase(field.id);
+        uint64_t val = Helper::RetrieveIntegerValue(*field, idx);
+        field->Delete(idx);
+        if (not field->has_value()) fields_.erase( fields_.find(field->id) );
         return Helper::DecodeUInt64(val, hi);
     }
 
@@ -546,14 +526,14 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         assert (iter != fields_.end());         /* field not found */
 
-        Field & field = iter->second;
-        CheckValidIndex(field, field_descriptor, idx);
-        TryDecodeField(&field, field_descriptor);
+        Field * field = iter->second;
+        CheckValidIndex(*field, field_descriptor, idx);
+        TryDecodeField(field, field_descriptor);
 
-        assert (field.decoded);
+        assert (field->decoded);
         if (not field_descriptor->is_repeated()) idx = 0;
-        double val = field.Delete(idx).decoded.primitive.d.d;
-        if (not field.has_value()) fields_.erase(field.id);
+        double val = field->Delete(idx).decoded.primitive.d.d;
+        if (not field->has_value()) fields_.erase( fields_.find(field->id) );
         return val;
     }
 
@@ -564,14 +544,14 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         assert (iter != fields_.end());         /* field not found */
 
-        Field & field = iter->second;
-        CheckValidIndex(field, field_descriptor, idx);
-        TryDecodeField(&field, field_descriptor);
+        Field * field = iter->second;
+        CheckValidIndex(*field, field_descriptor, idx);
+        TryDecodeField(field, field_descriptor);
 
-        assert (field.decoded);
+        assert (field->decoded);
         if (not field_descriptor->is_repeated()) idx = 0;
-        string val = field.Delete(idx).decoded.s;
-        if (not field.has_value()) fields_.erase(field.id);
+        string val = field->Delete(idx).decoded.s;
+        if (not field->has_value()) fields_.erase( fields_.find(field->id) );
         return val;
     }
 
@@ -582,14 +562,14 @@ namespace CompactProtobuf
         FieldMap::iterator iter = fields_.find(field_id);
         assert (iter != fields_.end());         /* field not found */
 
-        Field & field = iter->second;
-        CheckValidIndex(field, field_descriptor, idx);
-        TryDecodeField(&field, field_descriptor);
+        Field * field = iter->second;
+        CheckValidIndex(*field, field_descriptor, idx);
+        TryDecodeField(field, field_descriptor);
 
-        assert (field.decoded);
+        assert (field->decoded);
         if (not field_descriptor->is_repeated()) idx = 0;
-        MessagePtr val = field.Delete(idx).decoded.m;
-        if (not field.has_value()) fields_.erase(field.id);
+        MessagePtr val = field->Delete(idx).decoded.m;
+        if (not field->has_value()) fields_.erase( fields_.find(field->id) );
         return val;
     }
 
@@ -601,6 +581,18 @@ namespace CompactProtobuf
 
         buffer.ToString(output);
         return true;
+    }
+
+    Field * Message::AddKnownField(int id, const FieldDescriptor* field_descriptor)
+    {
+        Field * field = new Field;
+        field->decoded = true;
+        field->unknown = false;
+        field->id = id;
+        field->wire_type = Helper::GetWireType(field_descriptor);
+        field->field_descriptor = field_descriptor;
+        fields_.insert (id, field);
+        return field;
     }
 
     void Message::CheckValidIndex(const Field& field, const FieldDescriptor* field_descriptor, size_t idx)

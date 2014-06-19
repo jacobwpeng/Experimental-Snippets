@@ -83,7 +83,7 @@ void TestStaticProtobuf(benchmark::BenchmarkState& state, const string& encoded)
 
 void TestDynamicProtobuf(benchmark::BenchmarkState& state, const CompactProtobuf::Environment& env, const std::string& encoded)
 {
-    using CompactProtobuf::Message;
+    using namespace CompactProtobuf;
     for (int x = 0; x != state.max_x; ++x)
     {
         //TRACE_TIME_CONSUME;
@@ -102,6 +102,11 @@ void TestDynamicProtobuf(benchmark::BenchmarkState& state, const CompactProtobuf
         //string output;
         //message.ToString(&output);
     }
+
+    //printf("Field copied %d times\n", Field::times);
+    printf("Value copied %d times\n", Value::times);
+
+    Value::times = 0;
 }
 
 void TestProtobufReflection(benchmark::BenchmarkState& state, const string& encoded)
@@ -195,7 +200,7 @@ int main(int argc, char* argv[])
     //benchmark::AddBench("Static", 50, kMaxTimes, 0, 0, boost::bind(TestStaticProtobuf, _1, encoded), NULL, NULL);
     //benchmark::AddBench("Reflection", 50, kMaxTimes, 0, 0, boost::bind(TestProtobufReflection, _1, encoded), NULL, NULL);
     benchmark::AddBench("Dynamic", 50, kMaxTimes, 0, 0, boost::bind(TestDynamicProtobuf, _1, boost::ref(env), encoded), NULL, NULL);
-    benchmark::AddBench("AppendValue", 50, 1024, 0, 0, TestAppendValue, NULL, NULL);
+    //benchmark::AddBench("AppendValue", 50, 1024, 0, 0, TestAppendValue, NULL, NULL);
     //benchmark::AddBench("PBC", 50, kMaxTimes, 0, 0, boost::bind(TestPbc, _1, cenv, slice), NULL, NULL);
     benchmark::ExecuteAll();
 

@@ -19,6 +19,8 @@
 #include <string>
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
+#include <boost/noncopyable.hpp>
+#include <boost/ptr_container/ptr_map.hpp>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/descriptor_database.h>
 
@@ -40,7 +42,7 @@ namespace CompactProtobuf
 
     struct Field;
     class Message;
-    typedef map<int, Field> FieldMap;
+    typedef boost::ptr_map<int, Field> FieldMap;
     typedef boost::shared_ptr<Message> MessagePtr;
 
     struct Slice
@@ -83,10 +85,14 @@ namespace CompactProtobuf
             MessagePtr m;
             string s;
         } decoded;
+
+        static int times;
+        Value(){}
+        Value(const Value& rhs) { ++Value::times; encoded = rhs.encoded; decoded = rhs.decoded;}
     };
 
     typedef vector<Value> ValueList;
-    struct Field
+    struct Field : boost::noncopyable
     {
         bool decoded;
         bool unknown;
@@ -101,6 +107,7 @@ namespace CompactProtobuf
         const Value * value(size_t idx) const;
         Value Delete(size_t idx);
         void Append(const Value& value);
+        void Append(Value * value);
     };
 
     class Environment
@@ -171,6 +178,7 @@ namespace CompactProtobuf
             MessagePtr DeleteMessage(const string& name, size_t idx);
 
         private:
+            Field * AddKnownField(int id, const FieldDescriptor*);
             void CheckValidIndex(const Field& , const FieldDescriptor* , size_t idx);
             void TryDecodeField(Field* field, const FieldDescriptor* );
             const FieldDescriptor* CheckInteger(const string& name) const;

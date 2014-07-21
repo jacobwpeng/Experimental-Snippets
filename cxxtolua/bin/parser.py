@@ -25,15 +25,19 @@ class Type:
     def __init__(self):
         self.base_type = ''
         self.conversion_type = ''
-        self.type_kind = ''
+        self.kind = ''
         #self.pointer_level = 0
         self.is_const = False
         self.is_ref = False
 
     def __str__(self):
-        #tu = (self.real_type, self.conversion_type, self.type_kind, self.pointer_level, self.is_const)
-        tu = (self.base_type, self.conversion_type, self.type_kind, self.is_const, self.is_ref)
+        #tu = (self.real_type, self.conversion_type, self.kind, self.pointer_level, self.is_const)
+        tu = (self.base_type, self.conversion_type, self.kind, self.is_const, self.is_ref)
         return '{}'.format(tu)
+
+    @property
+    def hashcode(self):
+        return hash(self.conversion_type)
 
 
 class ArgumentType:
@@ -154,13 +158,16 @@ class FunctionParser:
 
         func.result_type = FunctionParser._get_result_type(cursor)
 
-        for arg in FunctionParser._get_args_type(cursor):
+        args = FunctionParser._get_args_type(cursor)
+        #prepend the class ptr as first argument
+        args.insert (0, FunctionParser._get_class_ptr_type(cursor))
+
+        for arg in args:
             func.append_argument (arg)
 
         optional_arguments_count = 0
         for c in cursor.get_children():
-            assert c.kind == clang.cindex.CursorKind.PARM_DECL
-            if any( [token.spelling == '=' for token in c.get_tokens()] ):
+            if c.kind == clang.cindex.CursorKind.PARM_DECL and any( [token.spelling == '=' for token in c.get_tokens()] ):
                 optional_arguments_count += 1
         func.set_optional_arguments_count(optional_arguments_count)
 
@@ -230,6 +237,19 @@ class FunctionParser:
         return res
 
     @staticmethod
+    def _get_class_ptr_type(cursor):
+        '''
+        result: ArgumentType
+        '''
+
+        argument_type = ArgumentType()
+        argument_type.name = '__class_ptr'
+        canonical_type = cursor.semantic_parent.type.get_canonical()
+        argument_type.type_ = FunctionParser._get_type(canonical_type)
+
+        return argument_type
+
+    @staticmethod
     def _get_args_type(cursor):
         '''
         result: [ ArgumentType ]
@@ -254,7 +274,7 @@ class FunctionParser:
         typename = canonical_type.kind.name
 
         type_ = Type()
-        type_.type_kind = typename
+        type_.kind = typename
         type_.is_ref = 'LVALUEREFERENCE' == typename
 
         (type_.base_type, type_.conversion_type, type_.is_const) = FunctionParser._get_conversion_type(canonical_type)

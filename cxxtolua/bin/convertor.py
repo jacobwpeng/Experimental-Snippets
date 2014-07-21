@@ -4,6 +4,8 @@ import os
 import parser
 from mako.template import Template
 
+template_path = '/home/work/repos/test/cxxtolua/template/'
+
 def get_arg_name(arg, idx):
     assert isinstance(idx, int)
     assert isinstance(arg, parser.ArgumentType)
@@ -19,13 +21,8 @@ def get_func_call(func, args):
 
     arg_names = []
     for idx, arg in enumerate(args):
-        if func.is_class_member_method:
-            idx += 2
-        else:
-            idx += 1
-
         arg_name = get_arg_name(arg, idx)
-        kind = arg.type_.type_kind
+        kind = arg.type_.kind
         if is_string_type(arg):
             pass
         elif kind == 'RECORD' or kind == 'LVALUEREFERENCE':
@@ -34,7 +31,7 @@ def get_func_call(func, args):
 
     arg_name_str = ', '.join(arg_names)
     if func.is_class_member_method:
-        template = Template( ''' class_ptr->${func_name}(${args}) ''')
+        template = Template( ''' __class_ptr->${func_name}(${args}) ''')
         return template.render(func_name = func.name, args = arg_name_str)
     else:
         return '%s::%s(%s) ' % (func.fully_qualified_prefix, func.name, arg_name_str)
@@ -92,7 +89,7 @@ def is_string_type(arg):
     elif arg.type_.conversion_type == 'std::basic_string<char> *':
         if arg.type_.is_const and arg.type_.is_ref:
             return True
-        elif arg.type_.type_kind == 'RECORD':
+        elif arg.type_.kind == 'RECORD':
             return True
     else:
         pass
@@ -101,13 +98,13 @@ def is_string_type(arg):
 
 def is_primitive_type(arg):
     assert (isinstance(arg, parser.ArgumentType) or isinstance(arg, parser.ResultType))
-    return arg.type_.type_kind in primitive_types
+    return arg.type_.kind in primitive_types
 
 def get_primitive_type_convert_func(arg):
     assert is_primitive_type(arg)
     assert isinstance(arg, parser.ArgumentType)
 
-    return convert_funcs[arg.type_.type_kind]
+    return convert_funcs[arg.type_.kind]
 
 def convert_arg(arg, idx):
     assert isinstance(idx, int)
@@ -189,7 +186,7 @@ def convert_arg_to_primitive_type(arg, idx):
 
     template = Template(template_str)
     return template.render(idx = idx, conversion_type = arg.type_.conversion_type, arg_name = get_arg_name(arg, idx)
-            , convert_func = convert_funcs[arg.type_.type_kind])
+            , convert_func = convert_funcs[arg.type_.kind])
 
 def convert_result(res, func_call):
     assert isinstance(func_call, basestring)
@@ -219,13 +216,13 @@ def convert_result_to_userdata(res, func_call):
     '''
 
     needs_gc = 'false'
-    if res.type_.type_kind == 'LVALUEREFERENCE':
+    if res.type_.kind == 'LVALUEREFERENCE':
         template = Template('res->val = (void*) &( ${func_call} );') 
         template_str = template_str % template.render(func_call = func_call)
-    elif res.type_.type_kind == 'POINTER':
+    elif res.type_.kind == 'POINTER':
         template = Template('res->val = (void*) ( ${func_call} );')
         template_str = template_str % template.render(func_call = func_call)
-    elif res.type_.type_kind == 'RECORD':
+    elif res.type_.kind == 'RECORD':
         template = Template('res->val = (void*) (new ${base_type} ( ${func_call} ));')
         template_str = template_str % template.render(base_type = res.type_.base_type, func_call = func_call)
         needs_gc = 'true'
@@ -255,7 +252,7 @@ def convert_result_to_primitive_type(res, func_call):
     '''
 
     template = Template(template_str)
-    return template.render( conversion_type = res.type_.conversion_type, func_call = func_call, push_func = push_funcs[res.type_.type_kind])
+    return template.render( conversion_type = res.type_.conversion_type, func_call = func_call, push_func = push_funcs[res.type_.kind])
 
 
 class FunctionConvertor:
@@ -286,7 +283,7 @@ class FunctionConvertor:
         class_ptr_type.type_.conversion_type = '%s *' % (class_ptr_type.type_.base_type)
         class_ptr_type.type_.is_const = func.is_const
         class_ptr_type.type_.is_ref = False
-        class_ptr_type.type_.type_kind = 'RECORD'
+        class_ptr_type.type_.kind = 'RECORD'
 
         stat = convert_arg_to_userdatatype(class_ptr_type, 1)
 
@@ -334,4 +331,104 @@ int ${full_func_name}(lua_State* L)
 
         return template.render(full_func_name = full_func_name, stat = stat)
 
+    @staticmethod
+    def write_class_method_impl(func):
+        assert isinstance(func, parser.Function)
+        assert func.is_class_member_method
+
+        args_declaration = [] #list of string
+        args_check = [] #also list of string
+        args_count = len(func.arguments)
+        userdata_arg_assignment_template = Template('${arg_name} = (${conversion_type})(__ud->val);')
+        primitive_arg_assignment_tempalte = Template('${arg_name} = ${lua_tofunc}(L, ${idx});')
+
+        check_ud_template = Template(filename = template_path + 'check_userdata_template.c')
+        check_primitive_tempalte = Template(filename = template_path + 'check_primitive_type_template.c')
+        check_string_template = Template(filename = template_path + 'check_string_type_template.c')
+
+        args_declaration.append ('UserdataWrapper * __ud;')
+        for idx, arg in enumerate(func.arguments):
+            real_idx = idx + 1 #starts from 1
+            arg_name = get_arg_name(arg, real_idx)
+            if is_string_type(arg):
+                args_declaration.append ('const char * %s;' % arg_name)
+            else:
+                args_declaration.append ('%s %s;' % (arg.type_.conversion_type, arg_name))
+
+            failed = 'return luaL_error(L, "arg %%d type mismatch!", %d);' % real_idx
+            if is_string_type(arg):
+                check_c_string_succeed = Template('${arg_name} = luaL_checkstring(L, ${idx});').render (
+                                    arg_name = arg_name, idx = real_idx)
+                check_std_string_succeed = Template('${arg_name} = ((${conversion_type})(__ud->val))->c_str();').render (
+                                    arg_name = arg_name, conversion_type = arg.type_.conversion_type)
+                args_check.append (check_string_template.render (idx = real_idx, 
+                                    std_string_hashcode = hash('std::basic_string<char> *'),
+                                    check_c_string_succeed = check_c_string_succeed,
+                                    check_std_string_succeed = check_std_string_succeed, 
+                                    check_failed = failed) )
+            elif is_userdata_type(arg):
+                succeed = userdata_arg_assignment_template.render (conversion_type = arg.type_.conversion_type, arg_name = arg_name)
+                check_const_expression = ''
+                if real_idx == 1 and func.is_const == False: check_const_expression = '__ud->type_info.is_const == false'
+                args_check.append (check_ud_template.render (idx = real_idx, type_hash = arg.type_.hashcode, 
+                    check_succeed = succeed, check_failed = failed, const_check = check_const_expression))
+
+            elif is_primitive_type(arg):
+                expression = '${arg_name} = ${convert_func}(L, ${idx});'
+                args_check.append (check_primitive_tempalte.render (
+                    check_expression = Template(expression).render (arg_name = arg_name, convert_func = get_primitive_type_convert_func(arg), idx = real_idx))
+                    )
+            else:
+                print func.name, idx, arg
+                assert False
+
+        args_declaration_part = os.linesep.join (args_declaration)
+        args_check_part = os.linesep.join (args_check)
+
+        func_call = get_func_call(func, func.arguments)
+
+        type_kind = func.result_type.type_.kind
+        push_result_expression = ''
+        if func.result_type.type_.base_type == 'VOID':
+            #no return type
+            func_call_and_assignment_expression = '%s;' % func_call
+        elif is_userdata_type (func.result_type):
+            needs_gc = False
+            if type_kind == 'RECORD':
+                needs_gc = True
+                template = Template(filename = template_path + 'generate_userdata_result.c')
+            elif type_kind == 'LVALUEREFERENCE':
+                template = Template(filename = template_path + 'generate_ref_userdata_result.c')
+            elif type_kind == 'POINTER':
+                template = Template(filename = template_path + 'generate_ptr_userdata_result.c')
+            else:
+                assert False
+            func_call_and_assignment_expression = template.render (is_const = func.result_type.type_.is_const and 'true' or 'false'
+                    , needs_gc = needs_gc and 'true' or 'false'
+                    , hashcode = func.result_type.type_.hashcode, base_type = func.result_type.type_.base_type, func_call = func_call
+                    , set_metatable_expression = '')
+        elif is_primitive_type(func.result_type):
+            template = Template(filename = template_path + 'generate_primitive_result.c')
+            func_call_and_assignment_expression = template.render (conversion_type = func.result_type.type_.conversion_type, func_call = func_call)
+            #only primitive type needs push result
+            push_result_expression = Template('${pushfunc}(L, __res);').render (pushfunc = push_funcs[func.result_type.type_.kind])
+        else:
+            print func.name, func.result_type
+            assert False
+
+        result_count = func.result_type.type_.base_type == 'VOID' and 0 or 1
+
+        #print args_declaration_part
+        #print args_check_part
+        #print func_call_and_assignment_expression
+        #print push_result_expression
+        #print result_count
+
+        function_body = Template (filename = template_path + 'function_body.c')
+        print function_body.render (args_declarations = args_declaration_part, args_check = args_check_part
+                , function_call_and_result_assignment = func_call_and_assignment_expression
+                , push_result = push_result_expression
+                , result_count = result_count)
+
+        print '*' * 80
 init()

@@ -86,23 +86,25 @@ def main():
     funcs = {}
     for pos, func in exports.items():
         if func: 
-            import copy
-            names = copy.deepcopy(func.semantic_parents)
-            names.append(func.name)
-            key = '_'.join(names)
-            if key in funcs:
-                funcs[key].append (func)
-            else:
-                funcs[key] = [func]
+    #        import copy
+    #        names = copy.deepcopy(func.semantic_parents)
+    #        names.append(func.name)
+    #        key = '_'.join(names)
+    #        if key in funcs:
+    #            funcs[key].append (func)
+    #        else:
+    #            funcs[key] = [func]
             #print convertor.FunctionConvertor.write_function(func)
+            print pos, func.name
+            convertor.FunctionConvertor.write_class_method_impl(func)
     #print '}'
 
-    for key, overload_funcs in funcs.iteritems():
-        print '%s has %d overload functions' % (key, len(overload_funcs))
-        for func in overload_funcs:
-            print 'func has %d arguments, %d required' % (len(func.arguments), func.min_arguments_required)
-            print os.linesep.join([str(arg) for arg in func.arguments])
-            print '*' * 80
+    #for key, overload_funcs in funcs.iteritems():
+    #    print '%s has %d overload functions' % (key, len(overload_funcs))
+    #    for func in overload_funcs:
+    #        print 'func has %d arguments, %d required' % (len(func.arguments), func.min_arguments_required)
+    #        print os.linesep.join([str(arg) for arg in func.arguments])
+    #        print '*' * 80
 
 if __name__ == '__main__':
     main()

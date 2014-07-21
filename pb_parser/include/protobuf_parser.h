@@ -29,6 +29,9 @@ namespace CompactProtobuf
 
         struct ParserState
         {
+            ParserState();
+            static int obj_count;
+
             Slice slice;
             size_t pos;
             int field_id;
@@ -36,6 +39,7 @@ namespace CompactProtobuf
             Value v;
             const Descriptor* descriptor;
         };
+
 
         int GetFieldId(uint64_t val);      /* tag is a varint in range [0, (1<<29)-1] */
         WireType GetWireType(uint64_t val);

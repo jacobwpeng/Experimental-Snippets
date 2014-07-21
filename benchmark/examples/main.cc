@@ -19,33 +19,40 @@
 #include <string>
 #include <iostream>
 #include <algorithm>
+#include <sys/time.h>
+#include <boost/ptr_container/ptr_vector.hpp>
+#include <google/protobuf/repeated_field.h>
 
 using namespace std;
 
-void TestDeque(benchmark::BenchmarkState& state)
+#define AddBench(name, min_x, max_x) benchmark::AddBench("Test"#name, min_x, max_x, 0, 0, Test##name, NULL, NULL)
+#define DeclareBench(name) void Test##name(benchmark::BenchmarkState& state)
+
+static const size_t kMaxNumberSize = 1 << 10;
+
+DeclareBench(PtrContainer)
 {
-    deque<int> container;
     for (int i = 0; i != state.max_x; ++i)
     {
-        container.push_back(i);
+        boost::ptr_vector<size_t> ints;
+        //vector<size_t> ints;
+        for (size_t idx = 0; idx != kMaxNumberSize; ++idx) ints.push_back(new size_t(idx));
     }
 }
 
-void TestVector(benchmark::BenchmarkState& state)
+DeclareBench(RepeatedPtrField)
 {
-    vector<int> container;
     for (int i = 0; i != state.max_x; ++i)
     {
-        container.push_back(i);
+        google::protobuf::RepeatedPtrField<size_t> ints;
+        for (size_t idx = 0; idx != kMaxNumberSize; ++idx) *ints.Add() = idx;
     }
 }
-
-#define AddBench(name, min_x, max_x) benchmark::AddBench(#name, min_x, max_x, 0, 0, name, NULL, NULL)
 
 int main()
 {
-    AddBench(TestDeque, 100, 1 << 22);
-    AddBench(TestVector, 100, 1 << 22);
+    AddBench(RepeatedPtrField, 1, 500);
+    AddBench(PtrContainer, 1, 500);
     benchmark::ExecuteAll();
     return 0;
 }

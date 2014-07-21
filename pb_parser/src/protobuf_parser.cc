@@ -19,6 +19,13 @@ namespace CompactProtobuf
 {
     namespace ProtobufParser
     {
+
+        ParserState::ParserState()
+        {
+            ++ParserState::obj_count;
+        }
+        int ParserState::obj_count = 0;
+
         int GetFieldId(uint64_t val)
         {
             return val >> 3;

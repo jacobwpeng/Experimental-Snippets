@@ -10,6 +10,7 @@
  * =====================================================================================
  */
 
+//#include <google/profiler.h>
 #include <stdint.h>
 #include <cstdio>
 #include <cassert>
@@ -18,11 +19,12 @@
 #include <boost/make_shared.hpp>
 
 #include "compact_protobuf.h"
-#include "protobuf_helper.h"
-#include "protobuf_parser.h"
+//#include "protobuf_helper.h"
+//#include "protobuf_parser.h"
 
 #include "benchmark.h"
 #include "userinfo.pb.h"
+#include "fx_object_pool.hpp"
 
 extern "C"
 {
@@ -69,47 +71,53 @@ void TestStaticProtobuf(benchmark::BenchmarkState& state, const string& encoded)
         HFPBUserInfo userinfo;
         if (userinfo.ParseFromString(encoded))
         {
-            for (int i = 0; i != userinfo.goods_size(); ++i)
-            {
-                const HFPBUserGoods& goods = userinfo.goods(i);
-                uint32_t goods_id = goods.goods_id();
-                uint32_t goods_num = goods.goods_num();
-            }
+        //    for (int i = 0; i != userinfo.goods_size(); ++i)
+        //    {
+        //        const HFPBUserGoods& goods = userinfo.goods(i);
+        //        uint32_t goods_id = goods.goods_id();
+        //        uint32_t goods_num = goods.goods_num();
+        //    }
         }
-        //string output;
-        //userinfo.SerializeToString(&output);
+        string output;
+        userinfo.SerializeToString(&output);
     }
 }
 
-void TestDynamicProtobuf(benchmark::BenchmarkState& state, const CompactProtobuf::Environment& env, const std::string& encoded)
-{
-    using namespace CompactProtobuf;
-    for (int x = 0; x != state.max_x; ++x)
-    {
-        //TRACE_TIME_CONSUME;
-        const CompactProtobuf::Descriptor * descriptor = env.FindMessageTypeByName("petlib.HFPBUserInfo");
-        CompactProtobuf::Message message(descriptor);
-        message.FromString(encoded);
-
-        int size = message.GetFieldSize("goods");
-        for (int i = 0; i != size; ++i)
-        {
-            CompactProtobuf::Message * goods_msg = message.GetMessage("goods", i);
-            uint32_t goods_id = goods_msg->GetInteger("goods_id", 0, NULL);
-            uint32_t goods_num = goods_msg->GetInteger("goods_num", 0, NULL);
-        }
-
-        //string output;
-        //message.ToString(&output);
-    }
-
-    //printf("Field copied %d times\n", Field::times);
-    if (Value::copied_times != 0)
-    {
-        printf("Value copied %d times\n", Value::copied_times);
-        Value::copied_times = 0;
-    }
-}
+//void TestDynamicProtobuf(benchmark::BenchmarkState& state, const CompactProtobuf::Environment& env, const std::string& encoded)
+//{
+//    using namespace CompactProtobuf;
+//    for (int x = 0; x != state.max_x; ++x)
+//    {
+//        //TRACE_TIME_CONSUME;
+//        const CompactProtobuf::Descriptor * descriptor = env.FindMessageTypeByName("petlib.HFPBUserInfo");
+//        CompactProtobuf::Message message(descriptor);
+//        message.FromString(encoded);
+//
+//        int size = message.GetFieldSize("goods");
+//        for (int i = 0; i != size; ++i)
+//        {
+//            CompactProtobuf::Message * goods_msg = message.GetMessage("goods", i);
+//            uint32_t goods_id = goods_msg->GetInteger("goods_id", 0, NULL);
+//            uint32_t goods_num = goods_msg->GetInteger("goods_num", 0, NULL);
+//        }
+//
+//        //string output;
+//        //message.ToString(&output);
+//    }
+//
+//    //printf("Field copied %d times\n", Field::times);
+//    //if (Value::copied_times != 0)
+//    //{
+//    //    printf("Value copied %d times\n", Value::copied_times);
+//    //    Value::copied_times = 0;
+//    //}
+//    //printf("ParserState create %d times\n", ProtobufParser::ParserState::obj_count);
+//    //ProtobufParser::ParserState::obj_count = 0;
+//        printf("Field create %d times\n", Field::create_times);
+//        printf("Value create %d times\n", Value::create_times);
+//        Field::create_times = 0;
+//        Value::create_times = 0;
+//}
 
 void TestProtobufReflection(benchmark::BenchmarkState& state, const string& encoded)
 {
@@ -162,26 +170,55 @@ void TestPbc(benchmark::BenchmarkState& state, struct pbc_env * env, const Compa
     }
 }
 
-void TestAppendValue(benchmark::BenchmarkState& state)
+//void TestAppendValue(benchmark::BenchmarkState& state)
+//{
+//    CompactProtobuf::Field field;
+//    for (int x = 0; x != state.max_x; ++x)
+//    {
+//        CompactProtobuf::Value v;
+//        field.FastAppend (v);
+//    }
+//}
+//
+//void TestNewField(benchmark::BenchmarkState& state)
+//{
+//    for (int x = 0; x != state.max_x; ++x)
+//    {
+//        CompactProtobuf::Field * field = new CompactProtobuf::Field;
+//        delete field;
+//    }
+//}
+
+template<typename T>
+void TestPoolObject(benchmark::BenchmarkState& state)
 {
-    CompactProtobuf::Field field;
+    fx::ObjectPool<T> pool;
     for (int x = 0; x != state.max_x; ++x)
     {
-        CompactProtobuf::Value v;
-        field.FastAppend (v);
+        T * p = pool.Construct();
+        //pool.Destroy(p);
     }
 }
+
+//void TestNewValue(benchmark::BenchmarkState& state)
+//{
+//    for (int x = 0; x != state.max_x; ++x)
+//    {
+//        CompactProtobuf::Value * v = new CompactProtobuf::Value;
+//        delete v;
+//    }
+//}
 
 int main(int argc, char* argv[])
 {
     if (argc != 3) return -1;
-    CompactProtobuf::Environment env;
+    //CompactProtobuf::Environment env;
 	struct pbc_env * cenv = pbc_new();
     {
         CompactProtobuf::Slice slice;
         if (false == ReadFile(argv[1], &slice)) return -1;
-        bool ok = env.Register(slice);
-        if (not ok) return -1;
+        //bool ok = env.Register(slice);
+        //if (not ok) return -1;
         {
             struct pbc_slice sl;
             sl.buffer = slice.start;
@@ -199,12 +236,18 @@ int main(int argc, char* argv[])
     string encoded(reinterpret_cast<char*>(slice.start), slice.end - slice.start);
 
     const size_t kMaxTimes = 1 << 10;
-    //benchmark::AddBench("Static", 50, kMaxTimes, 0, 0, boost::bind(TestStaticProtobuf, _1, encoded), NULL, NULL);
+    //ProfilerStart("run.prof");
+    benchmark::AddBench("Static", 50, kMaxTimes, 0, 0, boost::bind(TestStaticProtobuf, _1, encoded), NULL, NULL);
     //benchmark::AddBench("Reflection", 50, kMaxTimes, 0, 0, boost::bind(TestProtobufReflection, _1, encoded), NULL, NULL);
-    benchmark::AddBench("Dynamic", 50, kMaxTimes, 0, 0, boost::bind(TestDynamicProtobuf, _1, boost::ref(env), encoded), NULL, NULL);
-    //benchmark::AddBench("AppendValue", 50, 1024, 0, 0, TestAppendValue, NULL, NULL);
-    //benchmark::AddBench("PBC", 50, kMaxTimes, 0, 0, boost::bind(TestPbc, _1, cenv, slice), NULL, NULL);
+    //benchmark::AddBench("Dynamic", 50, kMaxTimes, 0, 0, boost::bind(TestDynamicProtobuf, _1, boost::ref(env), encoded), NULL, NULL);
+    //benchmark::AddBench("TestConstructState", 50, kMaxTimes, 0, 0, TestConstructState, NULL, NULL);
+    //benchmark::AddBench("NewField", 18350, 375808, 0, 0, TestNewField, NULL, NULL);
+    //benchmark::AddBench("PoolField", 18350, 375808, 0, 0, TestPoolObject<CompactProtobuf::Field>, NULL, NULL);
+    //benchmark::AddBench("NewValue", 39000, 798720, 0, 0, TestNewValue, NULL, NULL);
+    //benchmark::AddBench("PoolValue", 39000, 798720, 0, 0, TestPoolObject<CompactProtobuf::Value>, NULL, NULL);
+    benchmark::AddBench("PBC", 50, kMaxTimes, 0, 0, boost::bind(TestPbc, _1, cenv, slice), NULL, NULL);
     benchmark::ExecuteAll();
+    //ProfilerStop();
 
     delete [] slice.start;
     return 0;

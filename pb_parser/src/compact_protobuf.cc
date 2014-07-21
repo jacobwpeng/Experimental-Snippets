@@ -25,6 +25,13 @@ namespace CompactProtobuf
     /*-----------------------------------------------------------------------------
      *  Field
      *-----------------------------------------------------------------------------*/
+    int Field::create_times = 0;
+    Field::Field()
+    {
+        ++Field::create_times;
+        values.reserve(1);
+    }
+
     bool Field::has_value() const
     {
         return not values.empty();
@@ -54,8 +61,7 @@ namespace CompactProtobuf
         ValueList::iterator iter = values.begin();
         std::advance(iter, idx);
         ValuePtr v(new Value);
-        //v.CopyFrom(iter);
-        //struct Value v = *iter;
+        *v = *iter;
         values.erase(iter);
         return v;
     }
@@ -78,6 +84,7 @@ namespace CompactProtobuf
 
     Value::Value()
     {
+        ++Value::create_times;
     }
 
     Value::Value(const Value& rhs)
@@ -88,6 +95,7 @@ namespace CompactProtobuf
     }
 
     int Value::copied_times = 0;
+    int Value::create_times = 0;
     /*-----------------------------------------------------------------------------
      *  Environment
      *-----------------------------------------------------------------------------*/

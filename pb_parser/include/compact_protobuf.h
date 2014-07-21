@@ -91,12 +91,14 @@ namespace CompactProtobuf
 
         Value();
         Value(const Value& rhs);
+        static int create_times;
         static int copied_times;
     };
 
     typedef boost::ptr_vector<Value> ValueList;
     struct Field : boost::noncopyable
     {
+        Field();
         bool decoded;
         bool unknown;
         int id;
@@ -111,6 +113,8 @@ namespace CompactProtobuf
         ValuePtr Delete(size_t idx);
         void FastAppend(const Value& value);
         void Append(Value * value);
+
+        static int create_times;
     };
 
     class Environment

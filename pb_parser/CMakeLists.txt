@@ -12,7 +12,7 @@ find_package(Protobuf REQUIRED)
 #find_library(PTHREAD "pthread")
 include_directories(/opt/include)
 include_directories(include)
-include_directories(data)
+include_directories(data/eager/)
 
 list(APPEND LibSrcs src/compact_protobuf.cc 
                     src/protobuf_parser.cc 

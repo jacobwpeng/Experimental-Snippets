@@ -96,7 +96,7 @@ def main():
     #            funcs[key] = [func]
             #print convertor.FunctionConvertor.write_function(func)
             print pos, func.name
-            convertor.FunctionConvertor.write_class_method_impl(func)
+            convertor.FunctionConvertor.write_function(func)
     #print '}'
 
     #for key, overload_funcs in funcs.iteritems():

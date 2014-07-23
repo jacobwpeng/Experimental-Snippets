@@ -160,7 +160,7 @@ class FunctionParser:
 
         args = FunctionParser._get_args_type(cursor)
         #prepend the class ptr as first argument
-        args.insert (0, FunctionParser._get_class_ptr_type(cursor))
+        if func.is_class_member_method: args.insert (0, FunctionParser._get_class_ptr_type(cursor))
 
         for arg in args:
             func.append_argument (arg)

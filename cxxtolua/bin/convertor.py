@@ -260,14 +260,14 @@ class FunctionConvertor:
     Convert class Function to code in cplusplus
     '''
 
-    @staticmethod
-    def write_function(func):
-        assert isinstance(func, parser.Function)
+    #@staticmethod
+    #def write_function(func):
+    #    assert isinstance(func, parser.Function)
 
-        if func.is_class_member_method:
-            return FunctionConvertor._write_class_method(func)
-        else:
-            return FunctionConvertor._write_common_method(func)
+    #    if func.is_class_member_method:
+    #        return FunctionConvertor._write_class_method(func)
+    #    else:
+    #        return FunctionConvertor._write_common_method(func)
 
     @staticmethod
     def _write_class_method(func):
@@ -332,9 +332,9 @@ int ${full_func_name}(lua_State* L)
         return template.render(full_func_name = full_func_name, stat = stat)
 
     @staticmethod
-    def write_class_method_impl(func):
+    def write_function(func):
         assert isinstance(func, parser.Function)
-        assert func.is_class_member_method
+        #assert func.is_class_member_method
 
         args_declaration = [] #list of string
         args_check = [] #also list of string
@@ -389,9 +389,16 @@ int ${full_func_name}(lua_State* L)
 
         type_kind = func.result_type.type_.kind
         push_result_expression = ''
-        if func.result_type.type_.base_type == 'VOID':
+        if func.result_type.type_.kind == 'VOID':
             #no return type
             func_call_and_assignment_expression = '%s;' % func_call
+        elif is_string_type(func.result_type):
+            if type_kind == 'RECORD' or type_kind == 'LVALUEREFERENCE':
+                template = Template(filename = template_path + 'generate_string_result_from_std_string.c')
+            else:
+                template = Template(filename = template_path + 'generate_string_result_from_c_string.c')
+            func_call_and_assignment_expression = template.render (func_call = func_call)
+            push_result_expression = Template('${pushfunc}(L, __res);').render (pushfunc = 'lua_pushstring')
         elif is_userdata_type (func.result_type):
             needs_gc = False
             if type_kind == 'RECORD':
@@ -416,7 +423,7 @@ int ${full_func_name}(lua_State* L)
             print func.name, func.result_type
             assert False
 
-        result_count = func.result_type.type_.base_type == 'VOID' and 0 or 1
+        result_count = func.result_type.type_.kind == 'VOID' and 0 or 1
 
         #print args_declaration_part
         #print args_check_part

@@ -35,6 +35,7 @@ namespace A
         struct C {};
     }
 }
+#endif
 
 namespace D
 {
@@ -46,7 +47,6 @@ namespace D
     }
 }
 
-#endif
 
 namespace fx
 {
@@ -98,7 +98,6 @@ namespace fx
             LUA_EXPORT int Size(double d, int val = 3) const;
             LUA_EXPORT unsigned Size(vector<int> & vecs, vector<int> v = vector<int>(), std::string s = "12345") const;
             LUA_EXPORT const std::string * Size(const pair<int, int>& p, vector<int> * ptr, double d = 1.0);
-#if 0
             LUA_EXPORT void Append(int element);
             LUA_EXPORT bool Empty() const;
 
@@ -115,7 +114,6 @@ namespace fx
             LUA_EXPORT static void PrintMessage(const char* str);
 
             LUA_EXPORT std::string SayHello() const;
-#endif
 
         private:
             vector<int> v_;

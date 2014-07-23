@@ -12,12 +12,14 @@
 
 #include "benchmark.h"
 
+#include <cstdio>
 #include <stdint.h>
 #include <vector>
 #include <deque>
 #include <list>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include <algorithm>
 #include <sys/time.h>
 #include <boost/ptr_container/ptr_vector.hpp>
@@ -30,29 +32,32 @@ using namespace std;
 
 static const size_t kMaxNumberSize = 1 << 10;
 
-DeclareBench(PtrContainer)
+DeclareBench(sprintf)
 {
+    char buf[13];
     for (int i = 0; i != state.max_x; ++i)
     {
-        boost::ptr_vector<size_t> ints;
-        //vector<size_t> ints;
-        for (size_t idx = 0; idx != kMaxNumberSize; ++idx) ints.push_back(new size_t(idx));
+        int n = sprintf(buf, "%d", i);
+        string s(buf, n);
     }
 }
 
-DeclareBench(RepeatedPtrField)
+DeclareBench(stringstream)
 {
+    stringstream ss;
     for (int i = 0; i != state.max_x; ++i)
     {
-        google::protobuf::RepeatedPtrField<size_t> ints;
-        for (size_t idx = 0; idx != kMaxNumberSize; ++idx) *ints.Add() = idx;
+        ss << i;
+        string s(ss.str());
+        ss.clear();
+        ss.str("");
     }
 }
 
 int main()
 {
-    AddBench(RepeatedPtrField, 1, 500);
-    AddBench(PtrContainer, 1, 500);
+    AddBench(sprintf, 1, 1048576);
+    AddBench(stringstream, 1, 1048576);
     benchmark::ExecuteAll();
     return 0;
 }

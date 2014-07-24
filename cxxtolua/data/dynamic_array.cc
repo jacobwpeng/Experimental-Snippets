@@ -12,6 +12,7 @@
 
 #include "dynamic_array.h"
 #include <iostream>
+#include <cassert>
 
 D::E::C & D::E::SayHello()
 {
@@ -22,14 +23,25 @@ D::E::C & D::E::SayHello()
 
 namespace fx
 {
+    DynamicArray::DynamicArray()
+    {
+
+    }
+
     void DynamicArray::Append(int element)
     {
+        v_.push_back(element);
         return;
     }
 
     int DynamicArray::Size() const
     {
-        return 0;
+        return v_.size();
+    }
+
+    int DynamicArray::Size(int i) const
+    {
+        return i;
     }
 
     bool DynamicArray::Empty() const
@@ -37,20 +49,11 @@ namespace fx
         return true;
     }
 
-    LUA_EXPORT int DynamicArray::Get(const std::vector<int> * ptr, 
-            std::vector< pair<int, std::string> > & vecs) const
+    int DynamicArray::Get(int index) const
     {
-        return 0;
-    }
-
-    std::map< std::vector< pair<int, std::string> >, std::string> & DynamicArray::This(
-            const std::string ** ppstr,
-            std::string * pstr,
-            const std::string& str,
-            std::string s)
-    {
-        static std::map< std::vector< pair<int, std::string> >, std::string> m;
-        return m;
+        assert (index >= 1);
+        assert (index - 1< v_.size());
+        return v_[index - 1];
     }
 
     std::string DynamicArray::GetMessage()
@@ -66,5 +69,15 @@ namespace fx
     std::string DynamicArray::SayHello() const
     {
         return "Hello, World!";
+    }
+
+    DynamicArray * DynamicArray::New()
+    {
+        return new DynamicArray;
+    }
+
+    void DynamicArray::Delete(DynamicArray * ptr)
+    {
+        delete ptr;
     }
 }

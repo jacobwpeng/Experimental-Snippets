@@ -1,9 +1,20 @@
-${args_declarations}
+if (__top == ${argc})
+{
+    bool __check_failed = false;
+    ${args_declarations}
 
-${args_check}
+    ${args_check}
 
-${function_call_and_result_assignment}
+    if (not __check_failed)
+    {
+        ${function_call_and_result_assignment}
 
-${push_result}
+        ${push_result}
 
-return ${result_count};
+        return ${result_count};
+    }
+}
+else
+{
+    ${argc_mismatch}
+}

@@ -21,7 +21,7 @@ def get_func_call(func, args):
 
     arg_names = []
     for idx, arg in enumerate(args):
-        arg_name = get_arg_name(arg, idx)
+        arg_name = get_arg_name(arg, idx+1)
         kind = arg.type_.kind
         if is_string_type(arg):
             pass
@@ -29,11 +29,12 @@ def get_func_call(func, args):
             arg_name = '*%s' % arg_name
         arg_names.append(arg_name)
 
-    arg_name_str = ', '.join(arg_names)
     if func.is_class_member_method:
+        arg_name_str = ', '.join(arg_names[1:])
         template = Template( ''' __class_ptr->${func_name}(${args}) ''')
         return template.render(func_name = func.name, args = arg_name_str)
     else:
+        arg_name_str = ', '.join(arg_names)
         return '%s::%s(%s) ' % (func.fully_qualified_prefix, func.name, arg_name_str)
 
 def init():
@@ -332,9 +333,8 @@ int ${full_func_name}(lua_State* L)
         return template.render(full_func_name = full_func_name, stat = stat)
 
     @staticmethod
-    def write_function(func):
+    def _generate_function_body(func, check_failed_immediately = True):
         assert isinstance(func, parser.Function)
-        #assert func.is_class_member_method
 
         args_declaration = [] #list of string
         args_check = [] #also list of string
@@ -346,7 +346,6 @@ int ${full_func_name}(lua_State* L)
         check_primitive_tempalte = Template(filename = template_path + 'check_primitive_type_template.c')
         check_string_template = Template(filename = template_path + 'check_string_type_template.c')
 
-        args_declaration.append ('UserdataWrapper * __ud;')
         for idx, arg in enumerate(func.arguments):
             real_idx = idx + 1 #starts from 1
             arg_name = get_arg_name(arg, real_idx)
@@ -355,12 +354,13 @@ int ${full_func_name}(lua_State* L)
             else:
                 args_declaration.append ('%s %s;' % (arg.type_.conversion_type, arg_name))
 
-            failed = 'return luaL_error(L, "arg %%d type mismatch!", %d);' % real_idx
+            if check_failed_immediately: failed = 'return luaL_error(L, "arg %%d type mismatch!", %d);' % real_idx
+            else: failed = '__check_failed = true;'
             if is_string_type(arg):
                 check_c_string_succeed = Template('${arg_name} = luaL_checkstring(L, ${idx});').render (
                                     arg_name = arg_name, idx = real_idx)
-                check_std_string_succeed = Template('${arg_name} = ((${conversion_type})(__ud->val))->c_str();').render (
-                                    arg_name = arg_name, conversion_type = arg.type_.conversion_type)
+                check_std_string_succeed = Template('${arg_name} = ((std::basic_string<char> *)__ud->val)->c_str();').render (
+                                    arg_name = arg_name)
                 args_check.append (check_string_template.render (idx = real_idx, 
                                     std_string_hashcode = hash('std::basic_string<char> *'),
                                     check_c_string_succeed = check_c_string_succeed,
@@ -369,7 +369,7 @@ int ${full_func_name}(lua_State* L)
             elif is_userdata_type(arg):
                 succeed = userdata_arg_assignment_template.render (conversion_type = arg.type_.conversion_type, arg_name = arg_name)
                 check_const_expression = ''
-                if real_idx == 1 and func.is_const == False: check_const_expression = '__ud->type_info.is_const == false'
+                if real_idx == 1 and func.is_const == False: check_const_expression = ' && __ud->type_info.is_const == false'
                 args_check.append (check_ud_template.render (idx = real_idx, type_hash = arg.type_.hashcode, 
                     check_succeed = succeed, check_failed = failed, const_check = check_const_expression))
 
@@ -431,11 +431,40 @@ int ${full_func_name}(lua_State* L)
         #print push_result_expression
         #print result_count
 
-        function_body = Template (filename = template_path + 'function_body.c')
-        print function_body.render (args_declarations = args_declaration_part, args_check = args_check_part
+        function_body_template = Template (filename = template_path + 'function_body.c')
+        function_body = function_body_template.render (argc = len(func.arguments), args_declarations = args_declaration_part, args_check = args_check_part
                 , function_call_and_result_assignment = func_call_and_assignment_expression
                 , push_result = push_result_expression
-                , result_count = result_count)
+                , result_count = result_count
+                , argc_mismatch = check_failed_immediately and 'return luaL_error(L, "arg number mismatch");' or '')
 
-        print '*' * 80
+        return function_body
+
+    @staticmethod
+    def write_function(funcs):
+        assert isinstance(funcs, list)
+        assert funcs
+        if len(funcs) > 1:
+            bodies = FunctionConvertor.write_overload_function(funcs)
+        else:
+            bodies = FunctionConvertor._generate_function_body(funcs[0], True)
+
+        function =  Template (filename = template_path + 'function.c').render (function_name_prefix = funcs[0].fully_qualified_prefix.replace('::', '_') + '_'
+                , function_name = funcs[0].name, function_bodies = bodies)
+        print function
+        #print '*' * 80
+
+    @staticmethod
+    def write_overload_function(funcs):
+        assert len(funcs) > 1
+        bodies = []
+        for func in funcs:
+            body = FunctionConvertor._generate_function_body(func, False)
+            bodies.append (body)
+        bodies.append (
+                '''
+                return luaL_error(L, "Cannot find overloaded function declaration");
+                '''
+                )
+        return os.linesep.join (bodies)
 init()

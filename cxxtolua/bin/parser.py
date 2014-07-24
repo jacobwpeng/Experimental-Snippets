@@ -142,6 +142,40 @@ class Function:
 class FunctionParser:
 
     @staticmethod
+    def parse_constructor(cursor):
+        '''
+        result: Function
+        '''
+
+        func = Function()
+        func.set_name (cursor.spelling)
+        func.set_const (False)
+        func.set_class_member_method (False)
+
+        semantic_parents = FunctionParser._get_semantic_parents(cursor)
+        for parent in semantic_parents:
+            func.append_semantic_parent (parent)
+
+        func.result_type.type_.base_type = func.fully_qualified_prefix + ' '
+        func.result_type.type_.conversion_type = func.fully_qualified_prefix + ' *'
+        func.result_type.type_.kind = 'RECORD'
+
+        args = FunctionParser._get_args_type(cursor)
+        #prepend the class ptr as first argument
+        if func.is_class_member_method: args.insert (0, FunctionParser._get_class_ptr_type(cursor))
+
+        for arg in args:
+            func.append_argument (arg)
+
+        optional_arguments_count = 0
+        for c in cursor.get_children():
+            if c.kind == clang.cindex.CursorKind.PARM_DECL and any( [token.spelling == '=' for token in c.get_tokens()] ):
+                optional_arguments_count += 1
+        func.set_optional_arguments_count(optional_arguments_count)
+
+        return func
+
+    @staticmethod
     def parse_class_method(cursor):
         '''
         result: Function
@@ -320,6 +354,8 @@ class FunctionParser:
             if original_typename == 'RECORD': conversion_type += '*'
         else:
             base_type_name = obj.kind.name.lower()
+            if base_type_name == 'uint':
+                base_type_name = 'unsigned int'
             conversion_type = '%s %s' % (base_type_name, '*' * level)
 
         if is_const:

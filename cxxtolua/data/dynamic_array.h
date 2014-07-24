@@ -52,10 +52,10 @@ namespace fx
 {
     LUA_EXPORT_STACK_OBJECT
     LUA_EXPORT_HEAP_OBJECT
-    class DynamicArray : boost::noncopyable
+    class DynamicArray
     {
         public:
-            LUA_EXPORT DynamicArray();
+            DynamicArray();
 #if 0
             construct on heap -> static DynamicArray* New(arg1, arg2, ....);
             construct on stack -> static DynamicArray* DynamicArray(arg1, arg2, ...);
@@ -95,23 +95,15 @@ namespace fx
 #endif
             LUA_EXPORT int Size(void) const;
             LUA_EXPORT int Size(int val) const;
-            LUA_EXPORT int Size(double d, int val = 3) const;
-            LUA_EXPORT unsigned Size(vector<int> & vecs, vector<int> v = vector<int>(), std::string s = "12345") const;
-            LUA_EXPORT const std::string * Size(const pair<int, int>& p, vector<int> * ptr, double d = 1.0);
             LUA_EXPORT void Append(int element);
             LUA_EXPORT bool Empty() const;
 
-            LUA_EXPORT int Get(const std::vector<int> * ptr, 
-                    std::vector< pair<int, std::string> > & vecs) const;
-
-            LUA_EXPORT std::map< std::vector< pair<int, std::string> >, std::string> & This(
-                    const std::string ** ppstr,
-                    std::string * pstr,
-                    const std::string& str,
-                    std::string s);
+            LUA_EXPORT int Get(int index) const;
 
             LUA_EXPORT static std::string GetMessage();
             LUA_EXPORT static void PrintMessage(const char* str);
+            LUA_EXPORT static DynamicArray * New();
+            LUA_EXPORT static void Delete(DynamicArray * );
 
             LUA_EXPORT std::string SayHello() const;
 

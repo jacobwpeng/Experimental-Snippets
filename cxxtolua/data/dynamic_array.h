@@ -26,28 +26,6 @@ using std::map;
 using std::vector;
 using std::pair;
 
-#if 0
-namespace A
-{
-    namespace B
-    {
-        LUA_EXPORT_STACK_OBJECT
-        struct C {};
-    }
-}
-#endif
-
-namespace D
-{
-    namespace E
-    {
-        struct C {};
-
-        LUA_EXPORT C & SayHello();
-    }
-}
-
-
 namespace fx
 {
     LUA_EXPORT_STACK_OBJECT
@@ -55,7 +33,8 @@ namespace fx
     class DynamicArray
     {
         public:
-            DynamicArray();
+            LUA_EXPORT DynamicArray();
+            LUA_EXPORT DynamicArray(int i);
 #if 0
             construct on heap -> static DynamicArray* New(arg1, arg2, ....);
             construct on stack -> static DynamicArray* DynamicArray(arg1, arg2, ...);
@@ -93,19 +72,20 @@ namespace fx
                 return 1;
             }
 #endif
-            LUA_EXPORT int Size(void) const;
-            LUA_EXPORT int Size(int val) const;
+            LUA_EXPORT int Size() const;
             LUA_EXPORT void Append(int element);
             LUA_EXPORT bool Empty() const;
-
             LUA_EXPORT int Get(int index) const;
 
             LUA_EXPORT static std::string GetMessage();
             LUA_EXPORT static void PrintMessage(const char* str);
-            LUA_EXPORT static DynamicArray * New();
-            LUA_EXPORT static void Delete(DynamicArray * );
 
-            LUA_EXPORT std::string SayHello() const;
+            LUA_EXPORT static DynamicArray * New();
+            LUA_EXPORT static void Delete(DynamicArray * ptr);
+
+            LUA_EXPORT void TestOverload(int i, std::string str = "default value");
+            LUA_EXPORT void TestOverload(std::string str);
+            LUA_EXPORT void TestOverload();
 
         private:
             vector<int> v_;

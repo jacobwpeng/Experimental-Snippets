@@ -10,7 +10,7 @@ code_generate:
 	echo '#include <lua.hpp>' >> output.cc
 	echo 'extern "C" {' >> output.cc
 	../bin/run.py dynamic_array.h >> output.cc
-	astyle output.cc
+	astyle --delete-empty-lines --break-after-logical output.cc
 	rm -rf output.cc.orig
 	echo '}' >> output.cc
 

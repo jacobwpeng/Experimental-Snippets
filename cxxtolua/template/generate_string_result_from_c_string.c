@@ -1,1 +1,1 @@
-const char * __res = (${func_call});
+const std::string __res = (${func_call});

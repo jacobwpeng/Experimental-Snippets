@@ -14,18 +14,16 @@
 #include <iostream>
 #include <cassert>
 
-D::E::C & D::E::SayHello()
-{
-    static D::E::C c;
-    std::cout << "Hello" << '\n';
-    return c;
-}
-
 namespace fx
 {
     DynamicArray::DynamicArray()
     {
+        std::cout << __PRETTY_FUNCTION__ << '\n';
+    }
 
+    DynamicArray::DynamicArray(int i)
+    {
+        std::cout << __PRETTY_FUNCTION__ << '\n';
     }
 
     void DynamicArray::Append(int element)
@@ -37,11 +35,6 @@ namespace fx
     int DynamicArray::Size() const
     {
         return v_.size();
-    }
-
-    int DynamicArray::Size(int i) const
-    {
-        return i;
     }
 
     bool DynamicArray::Empty() const
@@ -66,11 +59,6 @@ namespace fx
         std::cout << str << '\n';
     }
 
-    std::string DynamicArray::SayHello() const
-    {
-        return "Hello, World!";
-    }
-
     DynamicArray * DynamicArray::New()
     {
         return new DynamicArray;
@@ -79,5 +67,20 @@ namespace fx
     void DynamicArray::Delete(DynamicArray * ptr)
     {
         delete ptr;
+    }
+
+    void DynamicArray::TestOverload(int i, std::string str)
+    {
+        std::cout << __PRETTY_FUNCTION__ << '\t' << str << '\n';
+    }
+
+    void DynamicArray::TestOverload(std::string)
+    {
+        std::cout << __PRETTY_FUNCTION__ << '\n';
+    }
+
+    void DynamicArray::TestOverload()
+    {
+        std::cout << __PRETTY_FUNCTION__ << '\n';
     }
 }

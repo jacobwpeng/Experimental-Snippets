@@ -4,5 +4,5 @@ int ${function_name_prefix}${function_name}(lua_State * L)
     UserdataWrapper * __ud;
     ${function_bodies}
 
-    return luaL_error(L, "Should never get here.");
+    return luaL_error(L, "Cannot find proper function to call.");
 }

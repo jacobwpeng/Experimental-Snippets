@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
+import os
 import sys
 import clang.cindex
-from clang.cindex import CursorKind
 import parser
 import convertor
 from parser import SourcePosition
+from clang.cindex import CursorKind
 from mako.template import Template
 
 exports = {}
@@ -68,31 +69,30 @@ def ProcessLuaExport(tu, node):
     for c in node.get_children():
         ProcessLuaExport(tu, c)
 
-def main():
-    import os
+def parse():
     filename = sys.argv[1]
     index = clang.cindex.Index.create()
     parse_options = clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD                                                                        
     tu = index.parse(filename, ['-x', 'c++', '-std=c++11', '-D__CODE_GENERATOR__'], options=parse_options)
 
     ProcessLuaExport(tu, tu.cursor)
-    funcs = {}
+
+def code_generation():
+    functions_with_same_name = {}
     for pos, func in exports.items():
         if func: 
-            import copy
-            names = copy.deepcopy(func.semantic_parents)
-            names.append(func.name)
+            names = [p for p in func.semantic_parents] + [func.name]
             key = '_'.join(names)
-            if key in funcs:
-                funcs[key].append (func)
+            if key in functions_with_same_name:
+                functions_with_same_name[key].append (func)
             else:
-                funcs[key] = [func]
+                functions_with_same_name[key] = [func]
 
     libfuncs = {}
     instfuncs = {}
-    for key, overload_funcs in funcs.iteritems():
-        convertor.FunctionConvertor.write_function(overload_funcs)
-        func = overload_funcs[0]
+    for key, functions in functions_with_same_name.iteritems():
+        convertor.FunctionConvertor.write_function(functions)
+        func = functions[0]
         if func.is_class_member_method:
             instfuncs[func.name] = func.fully_qualified_prefix.replace('::', '_') + '_' + func.name
         elif len(func.fully_qualified_prefix) != 0:
@@ -120,6 +120,10 @@ def main():
     export_library = Template(filename = '/home/work/repos/test/cxxtolua/template/export_library.cc').render (libfuncs = libfuncs_export)
 
     print export_library
+
+def main():
+    parse()
+    code_generation()
 
 if __name__ == '__main__':
     main()

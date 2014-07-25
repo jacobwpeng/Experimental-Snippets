@@ -14,13 +14,17 @@ def get_arg_name(arg, idx):
     else:
         return 'arg%d' % idx
 
-def get_func_call(func, args):
+def get_func_call(func, args, argc):
     assert isinstance(func, parser.Function)
     assert isinstance(args, list)
+    assert isinstance(argc, int)
+    assert len(args) >= argc
     if len(args) != 0: assert isinstance(args[0], parser.ArgumentType)
 
     arg_names = []
     for idx, arg in enumerate(args):
+        if idx == argc:
+            break
         arg_name = get_arg_name(arg, idx+1)
         kind = arg.type_.kind
         if is_string_type(arg):
@@ -29,7 +33,11 @@ def get_func_call(func, args):
             arg_name = '*%s' % arg_name
         arg_names.append(arg_name)
 
-    if func.is_class_member_method:
+    if func.is_constructor:
+        arg_name_str = ', '.join(arg_names)
+        template = Template( ''' new ${class_name}(${args}) ''')
+        return template.render(class_name = func.fully_qualified_prefix, args = arg_name_str)
+    elif func.is_class_member_method:
         arg_name_str = ', '.join(arg_names[1:])
         template = Template( ''' __class_ptr->${func_name}(${args}) ''')
         return template.render(func_name = func.name, args = arg_name_str)
@@ -261,84 +269,18 @@ class FunctionConvertor:
     Convert class Function to code in cplusplus
     '''
 
-    #@staticmethod
-    #def write_function(func):
-    #    assert isinstance(func, parser.Function)
-
-    #    if func.is_class_member_method:
-    #        return FunctionConvertor._write_class_method(func)
-    #    else:
-    #        return FunctionConvertor._write_common_method(func)
-
     @staticmethod
-    def _write_class_method(func):
+    def _generate_function_body(func, check_failed_immediately, argc = None):
         assert isinstance(func, parser.Function)
-        assert func.is_class_member_method
-        full_func_name = func.name
-        if func.semantic_parents:
-            full_func_name = '%s_%s' % (func.semantic_parents[-1], func.name)
 
-        class_ptr_type = parser.ArgumentType()
-        class_ptr_type.name = 'class_ptr'
-        class_ptr_type.type_.base_type = func.fully_qualified_prefix
-        class_ptr_type.type_.conversion_type = '%s *' % (class_ptr_type.type_.base_type)
-        class_ptr_type.type_.is_const = func.is_const
-        class_ptr_type.type_.is_ref = False
-        class_ptr_type.type_.kind = 'RECORD'
-
-        stat = convert_arg_to_userdatatype(class_ptr_type, 1)
-
-        for idx, arg in enumerate(func.arguments):
-            stat += convert_arg(arg, idx + 2)
-            stat += os.linesep
-
-        func_call = get_func_call(func, func.arguments)
-
-        stat += convert_result(func.result_type, func_call)
-
-        template = Template('''
-int ${full_func_name}(lua_State* L)
-{
-    UserdataWrapper * ud = NULL;
-    ${stat}
-}
-        ''')
-
-        return template.render(full_func_name = full_func_name, stat = stat)
-
-    @staticmethod
-    def _write_common_method(func):
-        assert isinstance(func, parser.Function)
-        assert not func.is_class_member_method
-
-        full_func_name = '_'.join(func.semantic_parents + [func.name])
-
-        stat = ''
-        for idx, arg in enumerate(func.arguments):
-            stat += convert_arg(arg, idx + 1)
-            stat += os.linesep
-
-        func_call = get_func_call(func, func.arguments)
-
-        stat += convert_result(func.result_type, func_call)
-
-        template = Template('''
-int ${full_func_name}(lua_State* L)
-{
-    UserdataWrapper * ud = NULL;
-    ${stat}
-}
-        ''')
-
-        return template.render(full_func_name = full_func_name, stat = stat)
-
-    @staticmethod
-    def _generate_function_body(func, check_failed_immediately = True):
-        assert isinstance(func, parser.Function)
+        if argc is None:
+            argc = func.argc
+        else:
+            assert isinstance(argc, int)
+            assert argc >= 0
 
         args_declaration = [] #list of string
         args_check = [] #also list of string
-        args_count = len(func.arguments)
         userdata_arg_assignment_template = Template('${arg_name} = (${conversion_type})(__ud->val);')
         primitive_arg_assignment_tempalte = Template('${arg_name} = ${lua_tofunc}(L, ${idx});')
 
@@ -347,6 +289,8 @@ int ${full_func_name}(lua_State* L)
         check_string_template = Template(filename = template_path + 'check_string_type_template.c')
 
         for idx, arg in enumerate(func.arguments):
+            if idx == argc:
+                break
             real_idx = idx + 1 #starts from 1
             arg_name = get_arg_name(arg, real_idx)
             if is_string_type(arg):
@@ -385,7 +329,7 @@ int ${full_func_name}(lua_State* L)
         args_declaration_part = os.linesep.join (args_declaration)
         args_check_part = os.linesep.join (args_check)
 
-        func_call = get_func_call(func, func.arguments)
+        func_call = get_func_call(func, func.arguments, argc)
 
         type_kind = func.result_type.type_.kind
         push_result_expression = ''
@@ -398,10 +342,13 @@ int ${full_func_name}(lua_State* L)
             else:
                 template = Template(filename = template_path + 'generate_string_result_from_c_string.c')
             func_call_and_assignment_expression = template.render (func_call = func_call)
-            push_result_expression = Template('${pushfunc}(L, __res);').render (pushfunc = 'lua_pushstring')
+            push_result_expression = Template('${pushfunc}(L, __res.c_str(), __res.size());').render (pushfunc = 'lua_pushlstring')
         elif is_userdata_type (func.result_type):
             needs_gc = False
-            if type_kind == 'RECORD':
+            if func.is_constructor:
+                needs_gc = True
+                template = Template(filename = template_path + 'generate_constructor_result.c')
+            elif type_kind == 'RECORD':
                 needs_gc = True
                 template = Template(filename = template_path + 'generate_userdata_result.c')
             elif type_kind == 'LVALUEREFERENCE':
@@ -432,7 +379,7 @@ int ${full_func_name}(lua_State* L)
         #print result_count
 
         function_body_template = Template (filename = template_path + 'function_body.c')
-        function_body = function_body_template.render (argc = len(func.arguments), args_declarations = args_declaration_part, args_check = args_check_part
+        function_body = function_body_template.render (argc = argc, args_declarations = args_declaration_part, args_check = args_check_part
                 , function_call_and_result_assignment = func_call_and_assignment_expression
                 , push_result = push_result_expression
                 , result_count = result_count
@@ -444,27 +391,24 @@ int ${full_func_name}(lua_State* L)
     def write_function(funcs):
         assert isinstance(funcs, list)
         assert funcs
-        if len(funcs) > 1:
-            bodies = FunctionConvertor.write_overload_function(funcs)
-        else:
-            bodies = FunctionConvertor._generate_function_body(funcs[0], True)
 
+        argc_functions_map = {}
+        for func in funcs:
+            for argc in xrange(func.argc_required, func.argc + 1):
+                if argc in argc_functions_map:
+                    if argc == func.argc:
+                        argc_functions_map[argc].insert(0, func)
+                    else:
+                        argc_functions_map[argc].append (func)
+                else:
+                    argc_functions_map[argc] = [func]
+        parts = []
+        for argc, functions in argc_functions_map.iteritems():
+            for function in functions:
+                parts.append (FunctionConvertor._generate_function_body(function, False, argc))
+
+        bodies = os.linesep.join(parts)
         function =  Template (filename = template_path + 'function.c').render (function_name_prefix = funcs[0].fully_qualified_prefix.replace('::', '_') + '_'
                 , function_name = funcs[0].name, function_bodies = bodies)
         print function
-        #print '*' * 80
-
-    @staticmethod
-    def write_overload_function(funcs):
-        assert len(funcs) > 1
-        bodies = []
-        for func in funcs:
-            body = FunctionConvertor._generate_function_body(func, False)
-            bodies.append (body)
-        bodies.append (
-                '''
-                return luaL_error(L, "Cannot find overloaded function declaration");
-                '''
-                )
-        return os.linesep.join (bodies)
 init()

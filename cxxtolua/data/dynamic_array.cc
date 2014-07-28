@@ -59,19 +59,19 @@ namespace fx
         std::cout << str << '\n';
     }
 
-    DynamicArray * DynamicArray::New()
-    {
-        return new DynamicArray;
-    }
+    //DynamicArray * DynamicArray::New()
+    //{
+    //    return new DynamicArray;
+    //}
 
-    void DynamicArray::Delete(DynamicArray * ptr)
-    {
-        delete ptr;
-    }
+    //void DynamicArray::Delete(DynamicArray * ptr)
+    //{
+    //    delete ptr;
+    //}
 
-    void DynamicArray::TestOverload(int i, std::string str)
+    void DynamicArray::TestOverload(int i)
     {
-        std::cout << __PRETTY_FUNCTION__ << '\t' << str << '\n';
+        std::cout << __PRETTY_FUNCTION__ << '\t' << i << '\n';
     }
 
     void DynamicArray::TestOverload(std::string)
@@ -79,7 +79,7 @@ namespace fx
         std::cout << __PRETTY_FUNCTION__ << '\n';
     }
 
-    void DynamicArray::TestOverload()
+    void DynamicArray::TestOverload(unsigned)
     {
         std::cout << __PRETTY_FUNCTION__ << '\n';
     }

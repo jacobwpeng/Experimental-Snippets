@@ -8,6 +8,7 @@ import convertor
 from parser import SourcePosition
 from clang.cindex import CursorKind
 from mako.template import Template
+from collections import defaultdict
 
 exports = {}
 objects = {}
@@ -53,17 +54,26 @@ def ProcessLuaExport(tu, node):
         for pos, v in exports.items():
             if v is None and (node.location.line > pos.line or node.location.line == pos.line and node.location.column > pos.col):
                 func = None
+                heap_constructor = None
                 if node.kind == clang.cindex.CursorKind.CXX_METHOD:
                     func = parser.FunctionParser.parse_class_method(node)
                 elif node.kind == clang.cindex.CursorKind.FUNCTION_DECL:
                     func = parser.FunctionParser.parse_free_function(node)
                 elif node.kind == clang.cindex.CursorKind.CONSTRUCTOR:
                     func = parser.FunctionParser.parse_constructor(node)
-                    pass
+                    import copy
+                    heap_constructor = copy.deepcopy(func)
+                    heap_constructor.set_is_stack_constrctor(False)
+                    heap_constructor.set_is_heap_constrctor(True)
+                    heap_constructor.set_name('New')
                 else:
-                    pass
+                    break
+
+                #print node.semantic_parent.location
                 if not func is None: 
                     exports[pos] = func
+                    if not heap_constructor is None:
+                        exports[SourcePosition(tu.spelling, pos.line, pos.col+1)] = heap_constructor
                 break
 
     for c in node.get_children():
@@ -78,15 +88,14 @@ def parse():
     ProcessLuaExport(tu, tu.cursor)
 
 def code_generation():
-    functions_with_same_name = {}
-    for pos, func in exports.items():
+    functions_with_same_name = defaultdict(list)
+    for _, func in exports.items():
         if func: 
             names = [p for p in func.semantic_parents] + [func.name]
             key = '_'.join(names)
-            if key in functions_with_same_name:
-                functions_with_same_name[key].append (func)
-            else:
-                functions_with_same_name[key] = [func]
+            functions_with_same_name[key].append(func)
+
+    #print any ([funcs[0].is_heap_constructor for funcs in functions_with_same_name.itervalues()])
 
     libfuncs = {}
     instfuncs = {}

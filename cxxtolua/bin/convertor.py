@@ -3,8 +3,22 @@
 import os
 import parser
 from mako.template import Template
+from collections import defaultdict
 
 template_path = '/home/work/repos/test/cxxtolua/template/'
+
+def sort_by_check_priority(fst, snd):
+    assert isinstance(fst, parser.Function)
+    assert isinstance(snd, parser.Function)
+
+    fst_delta = fst.argc - fst.argc_required
+    snd_delta = snd.argc - snd.argc_required
+
+    if fst_delta != snd_delta:
+        return fst_delta < snd_delta and -1 or 1
+
+    #check argument check priority
+    return 0
 
 def get_arg_name(arg, idx):
     assert isinstance(idx, int)
@@ -346,7 +360,7 @@ class FunctionConvertor:
         elif is_userdata_type (func.result_type):
             needs_gc = False
             if func.is_constructor:
-                needs_gc = True
+                needs_gc = func.is_stack_constructor
                 template = Template(filename = template_path + 'generate_constructor_result.c')
             elif type_kind == 'RECORD':
                 needs_gc = True
@@ -392,19 +406,16 @@ class FunctionConvertor:
         assert isinstance(funcs, list)
         assert funcs
 
-        argc_functions_map = {}
+        argc_functions_map = defaultdict(list)
         for func in funcs:
             for argc in xrange(func.argc_required, func.argc + 1):
-                if argc in argc_functions_map:
-                    if argc == func.argc:
-                        argc_functions_map[argc].insert(0, func)
-                    else:
-                        argc_functions_map[argc].append (func)
+                if argc == func.argc:
+                    argc_functions_map[argc].insert(0, func)
                 else:
-                    argc_functions_map[argc] = [func]
+                    argc_functions_map[argc].append (func)
         parts = []
         for argc, functions in argc_functions_map.iteritems():
-            for function in functions:
+            for function in sorted(functions, sort_by_check_priority):
                 parts.append (FunctionConvertor._generate_function_body(function, False, argc))
 
         bodies = os.linesep.join(parts)

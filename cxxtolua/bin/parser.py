@@ -66,7 +66,8 @@ class Function:
         self._name = ''
         self._is_const = False
         self._is_class_member_method = False
-        self._is_constructor = False
+        self._is_stack_constructor = False
+        self._is_heap_constructor = False
         self._optional_arguments_count = 0
 
     def __str__(self):
@@ -136,13 +137,25 @@ class Function:
         assert isinstance(count, int)
         self._optional_arguments_count = count
 
-    def set_is_constrctor(self, flag):
+    def set_is_stack_constrctor(self, flag):
         assert isinstance(flag, bool)
-        self._is_constructor = flag
+        self._is_stack_constructor = flag
+
+    def set_is_heap_constrctor(self, flag):
+        assert isinstance(flag, bool)
+        self._is_heap_constructor = flag
 
     @property
     def is_constructor(self):
-        return self._is_constructor
+        return self._is_stack_constructor or self._is_heap_constructor
+
+    @property
+    def is_stack_constructor(self):
+        return self._is_stack_constructor
+
+    @property
+    def is_heap_constructor(self):
+        return self._is_heap_constructor
 
     @property
     def argc(self):
@@ -170,7 +183,7 @@ class FunctionParser:
         func.set_name (cursor.spelling)
         func.set_const (False)
         func.set_class_member_method (False)
-        func.set_is_constrctor (True)
+        func.set_is_stack_constrctor (True)
 
         semantic_parents = FunctionParser._get_semantic_parents(cursor)
         for parent in semantic_parents:

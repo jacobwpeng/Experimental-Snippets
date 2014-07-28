@@ -26,11 +26,23 @@ using std::map;
 using std::vector;
 using std::pair;
 
+#if 0
+namespace A
+{
+    namespace B
+    {
+        struct C {};
+
+        LUA_EXPORT C& GetInstance();
+    }
+}
+#endif
+
 namespace fx
 {
     LUA_EXPORT_STACK_OBJECT
     LUA_EXPORT_HEAP_OBJECT
-    class DynamicArray
+    class DynamicArray : boost::noncopyable
     {
         public:
             LUA_EXPORT DynamicArray();
@@ -80,12 +92,12 @@ namespace fx
             LUA_EXPORT static std::string GetMessage();
             LUA_EXPORT static void PrintMessage(const char* str);
 
-            LUA_EXPORT static DynamicArray * New();
-            LUA_EXPORT static void Delete(DynamicArray * ptr);
+            //LUA_EXPORT static DynamicArray * New();
+            //LUA_EXPORT static void Delete(DynamicArray * ptr);
 
-            LUA_EXPORT void TestOverload(int i, std::string str = "default value");
+            LUA_EXPORT void TestOverload(int i);
             LUA_EXPORT void TestOverload(std::string str);
-            LUA_EXPORT void TestOverload();
+            LUA_EXPORT void TestOverload(unsigned);
 
         private:
             vector<int> v_;

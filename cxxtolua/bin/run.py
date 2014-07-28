@@ -3,12 +3,11 @@
 import os
 import sys
 import clang.cindex
-import parser
 import convertor
-from parser import SourcePosition
 from clang.cindex import CursorKind
 from mako.template import Template
 from collections import defaultdict
+from visitor import FunctionVisitor
 
 exports = {}
 objects = {}
@@ -39,57 +38,30 @@ def ProcessExportObject(tu, node):
     for c in node.get_children():
         ProcessExportObject(tu, c)
 
-def ProcessLuaExport(tu, node):
+def ProcessLuaExport(visitor, tu, node):
     #this translation unit only
     if node.location.file and str(node.location.file) != tu.spelling:
         return
 
-    #LUA_EXPORT only
-    if node.kind.is_preprocessing() and node.kind == clang.cindex.CursorKind.MACRO_INSTANTIATION and node.displayname == 'LUA_EXPORT':
-        pos = SourcePosition(tu.spelling, node.location.line, node.location.column)
-        exports[pos] = None
-
-    #unresolved export
-    if any(exports[key] == None for key in exports):
-        for pos, v in exports.items():
-            if v is None and (node.location.line > pos.line or node.location.line == pos.line and node.location.column > pos.col):
-                func = None
-                heap_constructor = None
-                if node.kind == clang.cindex.CursorKind.CXX_METHOD:
-                    func = parser.FunctionParser.parse_class_method(node)
-                elif node.kind == clang.cindex.CursorKind.FUNCTION_DECL:
-                    func = parser.FunctionParser.parse_free_function(node)
-                elif node.kind == clang.cindex.CursorKind.CONSTRUCTOR:
-                    func = parser.FunctionParser.parse_constructor(node)
-                    import copy
-                    heap_constructor = copy.deepcopy(func)
-                    heap_constructor.set_is_stack_constrctor(False)
-                    heap_constructor.set_is_heap_constrctor(True)
-                    heap_constructor.set_name('New')
-                else:
-                    break
-
-                #print node.semantic_parent.location
-                if not func is None: 
-                    exports[pos] = func
-                    if not heap_constructor is None:
-                        exports[SourcePosition(tu.spelling, pos.line, pos.col+1)] = heap_constructor
-                break
+    visitor.visit(tu, node)
 
     for c in node.get_children():
-        ProcessLuaExport(tu, c)
+        ProcessLuaExport(visitor, tu, c)
 
 def parse():
     filename = sys.argv[1]
     index = clang.cindex.Index.create()
     parse_options = clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD                                                                        
-    tu = index.parse(filename, ['-x', 'c++', '-std=c++11', '-D__CODE_GENERATOR__'], options=parse_options)
+    tu = index.parse(filename, ['-x', 'c++', '-std=c++11', '-D__CODE_GENERATOR__'], options = parse_options)
 
-    ProcessLuaExport(tu, tu.cursor)
+    visitor = FunctionVisitor()
+    ProcessLuaExport(visitor, tu, tu.cursor)
 
-def code_generation():
+    return visitor.export_functions
+
+def code_generation(export_functions):
     functions_with_same_name = defaultdict(list)
-    for _, func in exports.items():
+    for func in export_functions:
         if func: 
             names = [p for p in func.semantic_parents] + [func.name]
             key = '_'.join(names)
@@ -131,8 +103,8 @@ def code_generation():
     print export_library
 
 def main():
-    parse()
-    code_generation()
+    functions = parse()
+    code_generation(functions)
 
 if __name__ == '__main__':
     main()

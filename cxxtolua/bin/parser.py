@@ -14,6 +14,20 @@ class SourcePosition:
     def __hash__(self):
         return hash('%s:%d:%d' % (self.filename, self.line, self.col))
 
+    def __lt__(self, other):
+        '''
+        positions can only be compared if they're in the same file
+        priority: line > col
+        '''
+        assert self.filename == other.filename
+        if self.line != other.line:
+            return self.line < other.line
+        else:
+            return self.col < other.col
+
+    def __le__(self, other):
+        return self.__lt__(other) or self.__eq__(other)
+
     def __eq__(self, other):
         return self.filename == other.filename and self.line == other.line and self.col == other.col
 

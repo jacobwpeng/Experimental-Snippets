@@ -40,8 +40,9 @@ namespace A
 
 namespace fx
 {
-    LUA_EXPORT_STACK_OBJECT
-    LUA_EXPORT_HEAP_OBJECT
+    LUA_EXPORT bool SayHello(const std::string& str, const std::string * ptr, const char * pMsg, std::string msg = "123");
+    LUA_EXPORT int SayHello(const std::string& str, double val);
+    LUA_EXPORT void SayHello(const std::vector<int>& vec, int val);
     class DynamicArray : boost::noncopyable
     {
         public:
@@ -84,6 +85,12 @@ namespace fx
                 return 1;
             }
 #endif
+            struct Internal
+            {
+                public:
+                    LUA_EXPORT void Say();
+            };
+
             LUA_EXPORT int Size() const;
             LUA_EXPORT void Append(int element);
             LUA_EXPORT bool Empty() const;
@@ -98,6 +105,7 @@ namespace fx
             LUA_EXPORT void TestOverload(int i);
             LUA_EXPORT void TestOverload(std::string str);
             LUA_EXPORT void TestOverload(unsigned);
+            LUA_EXPORT void TestOverload(double, int, const char* ptr = "msg");
 
         private:
             vector<int> v_;

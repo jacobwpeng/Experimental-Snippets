@@ -198,6 +198,7 @@ class FunctionParser:
         func.set_const (False)
         func.set_class_member_method (False)
         func.set_is_stack_constrctor (True)
+        print FunctionParser._get_type(cursor.result_type.get_canonical())
 
         semantic_parents = FunctionParser._get_semantic_parents(cursor)
         for parent in semantic_parents:

@@ -2,8 +2,10 @@
 doc
 '''
 
+import cpp_types
+import code_parser
 from clang.cindex import *
-from parser import SourcePosition, FunctionParser
+from parser import SourcePosition
 
 class FunctionVisitor:
     '''
@@ -13,11 +15,42 @@ class FunctionVisitor:
     def __init__(self):
         self._export_functions = {} # pos -> Function dict
         self._current_tu = None
-        pass
+        self._global_scope = cpp_types.NamespaceScope('', '__global')
+        self._process_map = {
+                CursorKind.CXX_METHOD: self._visit_cxx_method,
+                CursorKind.FUNCTION_DECL: self._visit_free_function,
+                CursorKind.CONSTRUCTOR: self._visit_constructor
+                }
 
     @property
-    def export_functions(self):
-        return self._export_functions.itervalues()
+    def scope(self):
+        return self._global_scope
+
+    def get_scope(self, node):
+        assert isinstance(node, Cursor)
+        semantic_parents = code_parser.get_semantic_parents(node)
+        s = self._global_scope
+        prefixes = []
+        for p in semantic_parents:
+            prev = s
+            s = s.get_scope(p.name)
+            if s is None:
+                prefix = '_'.join(prefixes)
+                if p.kind == CursorKind.CLASS_DECL or p.kind == CursorKind.STRUCT_DECL:
+                    sub = cpp_types.ClassScope(prefix, p.name)
+                    prev.add_sub_class_scope(sub)
+                elif p.kind == CursorKind.NAMESPACE:
+                    sub = cpp_types.NamespaceScope(prefix, p.name)
+                    prev.add_sub_namespace_scope(sub)
+                else:
+                    assert False, p.kind
+                s = prev.get_scope(p.name)
+                prev = s
+            assert s
+            prefixes.append (s.name)
+
+        return s
+
 
     def visit(self, tu, node):
         assert isinstance(tu, TranslationUnit)
@@ -27,14 +60,15 @@ class FunctionVisitor:
 
         if node.kind.is_preprocessing():
             self._visit_preprocessing(node)
-        elif node.kind == CursorKind.CXX_METHOD:
-            self._visit_cxx_method(node)
-        elif node.kind == CursorKind.FUNCTION_DECL:
-            self._visit_function_decl(node)
-        elif node.kind == CursorKind.CONSTRUCTOR:
-            self._visit_constructor(node)
-        else:
-            pass
+
+        functions = None
+
+        if node.kind in self._process_map:
+            scope = self.get_scope(node)
+            functions = self._process_map[node.kind](node)
+
+        if functions:
+            scope.add_functions(functions)
 
     def _visit_preprocessing(self, node):
         if node.kind == CursorKind.MACRO_INSTANTIATION and node.displayname == 'LUA_EXPORT':
@@ -44,17 +78,20 @@ class FunctionVisitor:
     def _visit_cxx_method(self, node):
         pos = self._get_next_position(node)
         if pos:
-            self._export_functions[pos] = FunctionParser.parse_class_method(node)
+            self._export_functions[pos] = True
+            return code_parser.parse_class_method(node)
 
-    def _visit_function_decl(self, node):
+    def _visit_free_function(self, node):
         pos = self._get_next_position(node)
         if pos:
-            self._export_functions[pos] = FunctionParser.parse_free_function(node)
+            self._export_functions[pos] = True
+            return code_parser.parse_free_function(node)
 
     def _visit_constructor(self, node):
         pos = self._get_next_position(node)
         if pos:
-            self._export_functions[pos] = FunctionParser.parse_constructor(node)
+            self._export_functions[pos] = True
+            return code_parser.parse_constructor(node)
 
     def _get_next_position(self, node):
         here = SourcePosition(self._current_tu.spelling, node.location.line, node.location.column)

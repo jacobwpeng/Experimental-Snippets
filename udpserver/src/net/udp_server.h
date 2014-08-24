@@ -29,7 +29,7 @@ namespace fx
         class UdpServer : boost::noncopyable
         {
             public:
-                typedef boost::function< std::string(const std::string&) > ReadCallback;
+                typedef boost::function< ssize_t(const char*, size_t, char*) > ReadCallback;
 
             public:
                 UdpServer(EventLoop * loop, const std::string& ip, int port);

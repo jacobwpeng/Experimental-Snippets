@@ -26,7 +26,7 @@ namespace fx
         class UdpListener : boost::noncopyable
         {
             public:
-                typedef boost::function< std::string(const std::string&) > MessageCallback;
+                typedef boost::function< ssize_t(const char*, size_t, char*) > MessageCallback;
 
             public:
                 UdpListener(EventLoop * loop);

@@ -32,12 +32,13 @@ void ArenaServer::Start()
 {
     EventLoop loop;
     server_.reset (new UdpServer(&loop, ip_, port_));
-    server_->set_read_callback(boost::bind(&ArenaServer::OnRead, this, _1));
+    server_->set_read_callback(boost::bind(&ArenaServer::OnRead, this, _1, _2, _3));
     server_->Start();
     loop.Run();
 }
 
-std::string ArenaServer::OnRead(const std::string& message)
+ssize_t ArenaServer::OnRead(const char* in, size_t len, char * out)
 {
-    return message;
+    memcpy(out, in, len);                /* echo back */
+    return len;
 }

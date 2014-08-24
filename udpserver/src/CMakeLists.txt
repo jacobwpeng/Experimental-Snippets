@@ -1,12 +1,12 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
-PROJECT(fx)
+cmake_minimum_required(VERSION 2.6)
+project(fx)
 
 SET(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-unused-variable -Wno-unused-private-field -ggdb" )
-SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS}")
-SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -DNDEBUG -O3" )
+SET(CMAKE_CXX_FLAGS_DEBUG "")
+SET(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3" )
 
-FIND_LIBRARY(GLOG "glog")
-FIND_PACKAGE(Boost COMPONENTS REQUIRED system thread)
+find_library(GLOG "glog")
+find_package(Boost COMPONENTS REQUIRED system thread)
 
 add_subdirectory(base)
 add_subdirectory(net)

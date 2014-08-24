@@ -28,7 +28,7 @@ class ArenaServer : boost::noncopyable
         void Start();
 
     private:
-        std::string OnRead(const std::string& message);
+        ssize_t OnRead(const char* in, size_t len, char * out);
 
     private:
         boost::scoped_ptr<fx::net::UdpServer> server_;

@@ -10,6 +10,7 @@ find_library(pthead "pthread" )
 list(APPEND base_test_srcs
             gtest-all.cc
             memory_list_unittest.cc
+            list_unittest.cc
             rbtree_unittest.cc
     )
 

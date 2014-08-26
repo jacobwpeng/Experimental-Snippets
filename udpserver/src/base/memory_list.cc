@@ -20,9 +20,10 @@ namespace fx
     namespace base
     {
         const int64_t MemoryList::kMagicNumber = -356060050714630365;
+        const size_t MemoryList::kSliceHeadSize = sizeof(MemoryList::SliceId) * 2;
 
         MemoryList::MemoryList(size_t slice_size)
-            :kSliceHeadSize(offsetof(Slice, buf)), kSliceRealSize(kSliceHeadSize + slice_size)
+            :kSliceRealSize(kSliceHeadSize + slice_size)
         {
         }
 
@@ -38,7 +39,7 @@ namespace fx
             uintptr_t e = reinterpret_cast<uintptr_t>(end);
 
             assert (end > start);
-            if (s + sizeof(Header) >= e) return NULL;
+            if (s + sizeof(Header) > e) return NULL;
 
             ptr->header_ = reinterpret_cast<Header*>(start);
             ptr->header_->buffer_length = len;
@@ -73,8 +74,7 @@ namespace fx
             ptr->start_ = start;
             ptr->end_ = end;
             ptr->buf_ = reinterpret_cast<void*>( s+sizeof(Header) );
-            ptr->capacity_ = reinterpret_cast<Slice*>(reinterpret_cast<uintptr_t>(end) - ptr->header_->padding)
-                            - reinterpret_cast<Slice*>(ptr->buf_);
+            ptr->capacity_ = (len - ptr->header_->padding - kHeaderSize) / (kSliceHeadSize + slice_size);
 
             return ptr.release();
         }

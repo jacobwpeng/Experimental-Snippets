@@ -49,22 +49,25 @@ TEST_F(MemoryListUnittest, Create)
     // floor((65536 - 48) / (20 + 8)) == 2338
     EXPECT_EQ (ml->capacity(), 2338);
     EXPECT_EQ (0, ml->size());
+    EXPECT_EQ (buf, ml->start());
+    EXPECT_FALSE (ml->full());
 }
 
 TEST_F(MemoryListUnittest, CreateFailed)
 {
-    char buf[48];
+    char buf[MemoryList::kHeaderSize - 1];
     boost::scoped_ptr<MemoryList> ml(MemoryList::CreateFrom(buf, sizeof(buf), 1));
     EXPECT_TRUE (ml == NULL);
 }
 
 TEST_F(MemoryListUnittest, CreateEmpty)
 {
-    char buf[49];
+    char buf[MemoryList::kHeaderSize];
     boost::scoped_ptr<MemoryList> ml(MemoryList::CreateFrom(buf, sizeof(buf), 1));
     EXPECT_TRUE (ml != NULL);
     EXPECT_EQ (ml->capacity(), 0);
     EXPECT_EQ (ml->size(), 0);
+    EXPECT_TRUE (ml->full());
     EXPECT_TRUE (MemoryList::kInvalidSliceId == ml->GetSlice());
 }
 
@@ -90,6 +93,7 @@ TEST_F(MemoryListUnittest, Malloc)
 
     EXPECT_EQ (size, ml->size());
     EXPECT_EQ (size, ml->capacity());
+    EXPECT_TRUE (ml->full());
 }
 
 TEST_F(MemoryListUnittest, Free)

@@ -14,6 +14,7 @@
 #define  __SYSTEM_TIME_H__
 
 #include <stdint.h>
+#include <ctime>
 
 namespace fx
 {
@@ -25,6 +26,11 @@ namespace fx
 
             //Unix timestamp in us
             TimeStamp Now();
+
+            /*-----------------------------------------------------------------------------
+             *  format -> 2014-08-22 01:23:45
+             *-----------------------------------------------------------------------------*/
+            time_t StringToTime(const char * time);
         }
     }
 }

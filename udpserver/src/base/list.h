@@ -31,8 +31,9 @@ namespace fx
             template <typename T>
             class List<T, typename boost::enable_if< boost::is_pod<T> >::type >
             {
-                private:
+                public:
                     typedef fx::base::MemoryList::SliceId NodeId;
+                private:
                     typedef List<T, typename boost::enable_if< boost::is_pod<T> >::type > Self;
                     static const size_t kMagicNumber = 8522338164747840960;
                 private:
@@ -53,30 +54,6 @@ namespace fx
 
                     List()
                     {
-                    }
-
-                    void Unlink(NodeId id)
-                    {
-                        assert (id != kInvalidNodeId);
-                        Node * node = GetNode(id);
-                        Node * prev = GetNode(node->prev);
-                        Node * next = GetNode(node->next);
-                        if (prev)
-                        {
-                            prev->next = node->next;
-                        }
-                        else
-                        {
-                            md_->head = node->next;
-                        }
-                        if (next)
-                        {
-                            next->prev = node->prev;
-                        }
-                        else
-                        {
-                            md_->tail = node->prev;
-                        }
                     }
 
                     Node * GetNode(NodeId id)
@@ -122,6 +99,32 @@ namespace fx
                         ptr->ml_.reset (MemoryList::RestoreFrom(reinterpret_cast<void*>(start), len - sizeof(MetaData), sizeof(Node)));
                         if (ptr->ml_ == NULL) return NULL;
                         return ptr.release();
+                    }
+
+                    T Unlink(NodeId id)
+                    {
+                        assert (id != kInvalidNodeId);
+                        Node * node = GetNode(id);
+                        Node * prev = GetNode(node->prev);
+                        Node * next = GetNode(node->next);
+                        if (prev)
+                        {
+                            prev->next = node->next;
+                        }
+                        else
+                        {
+                            md_->head = node->next;
+                        }
+                        if (next)
+                        {
+                            next->prev = node->prev;
+                        }
+                        else
+                        {
+                            md_->tail = node->prev;
+                        }
+                        --md_->size;
+                        return node->val;
                     }
 
                     NodeId PushFront(T val)
@@ -189,10 +192,7 @@ namespace fx
                         assert (md_->head != kInvalidNodeId);
                         assert (md_->tail != kInvalidNodeId);
 
-                        Node * front = GetNode(md_->head);
-                        Unlink(md_->head);
-                        --md_->size;
-                        return front->val;
+                        return Unlink(md_->head);
                     }
 
                     T PopBack()
@@ -200,14 +200,19 @@ namespace fx
                         assert (md_->head != kInvalidNodeId);
                         assert (md_->tail != kInvalidNodeId);
 
+                        return Unlink(md_->tail);
+                    }
+
+                    T Back()
+                    {
+                        assert (md_->tail != kInvalidNodeId);
                         Node * back = GetNode(md_->tail);
-                        Unlink(md_->tail);
-                        --md_->size;
                         return back->val;
                     }
 
                     size_t size() const { return md_->size; }
                     size_t capacity() const { return ml_->capacity(); }
+                    bool full() const { return size() == capacity(); }
 
                 private:
                     MetaData * md_;

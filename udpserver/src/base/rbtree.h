@@ -40,6 +40,7 @@ namespace fx
                             typename boost::enable_if< boost::is_pod<_Value> >::type> ThisType;
                     typedef _Key KeyType;
                     typedef _Value ValueType;
+
                 private:
                     typedef fx::base::MemoryList::SliceId NodeId;
                     static const NodeId kInvalidNodeId = fx::base::MemoryList::kInvalidSliceId;

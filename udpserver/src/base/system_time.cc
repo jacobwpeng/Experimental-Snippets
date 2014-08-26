@@ -29,6 +29,15 @@ namespace fx
 
                 return static_cast<TimeStamp>(tv.tv_sec) * 1000000 + static_cast<TimeStamp>(tv.tv_usec);
             }
+
+            time_t StringToTime(const char * time)
+            {
+                const char * fmt = "%Y-%m-%d %H:%M:%S";
+                struct tm tm;
+                char * end = ::strptime(time, fmt, &tm);
+                if (end == NULL || *end != '\0') { return -1; }
+                return ::mktime(&tm);
+            }
         }
     }
 }

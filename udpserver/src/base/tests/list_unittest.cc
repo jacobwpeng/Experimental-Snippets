@@ -146,6 +146,39 @@ TEST_F(ListUnittest, PopFront)
     EXPECT_EQ (list->size(), 0);
 }
 
+TEST_F(ListUnittest, Back)
+{
+    const size_t kBufSize = 1 << 16;
+    char buf[kBufSize];
+    typedef List<unsigned> ListType;
+    
+    boost::scoped_ptr<ListType> list(ListType::CreateFrom(buf, kBufSize));
+    ASSERT_TRUE (list != NULL);
+    list->PushBack(1);
+    list->PushBack(2);
+    EXPECT_EQ (2, list->PopBack());
+    EXPECT_EQ (1, list->Back());
+    EXPECT_EQ (1, list->PopBack());
+}
+
+TEST_F(ListUnittest, Unlink)
+{
+    const size_t kBufSize = 1 << 16;
+    char buf[kBufSize];
+    typedef List<unsigned> ListType;
+    
+    boost::scoped_ptr<ListType> list(ListType::CreateFrom(buf, kBufSize));
+    ASSERT_TRUE (list != NULL);
+    ListType::NodeId first = list->PushBack(1);
+    ListType::NodeId second = list->PushBack(2);
+    ListType::NodeId thrid = list->PushBack(3);
+
+    EXPECT_EQ (2, list->Unlink(second));
+    EXPECT_EQ (2, list->size());
+    EXPECT_EQ (1, list->PopFront());
+    EXPECT_EQ (3, list->PopBack());
+}
+
 TEST_F(ListUnittest, RestoreFrom)
 {
     const size_t kBufSize = 1 << 16;

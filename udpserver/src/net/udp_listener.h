@@ -13,6 +13,7 @@
 #ifndef  __UDP_LISTENER_H__
 #define  __UDP_LISTENER_H__
 
+#include <string>
 #include <boost/scoped_ptr.hpp>
 #include <boost/function.hpp>
 #include <boost/noncopyable.hpp>
@@ -26,7 +27,7 @@ namespace fx
         class UdpListener : boost::noncopyable
         {
             public:
-                typedef boost::function< ssize_t(const char*, size_t, char*) > MessageCallback;
+                typedef boost::function< int(const char*, size_t, std::string*) > MessageCallback;
 
             public:
                 UdpListener(EventLoop * loop);

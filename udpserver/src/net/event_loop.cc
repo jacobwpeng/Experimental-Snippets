@@ -44,7 +44,7 @@ namespace fx
             {
                 fx::base::time::TimeStamp now = poller_->Poll(timeout, &channels);
                 ++iteration_;
-                DLOG(INFO) << "now[" << now << "], iteration[" << iteration_ << "], timeout[" << timeout << "]";
+                //DLOG(INFO) << "now[" << now << "], iteration[" << iteration_ << "], timeout[" << timeout << "]";
 
                 BOOST_FOREACH(Channel * channel, channels)
                 {
@@ -57,7 +57,7 @@ namespace fx
                 if (idle >= 100) timeout = idle_time_;
                 else timeout = wait_time_;
             }
-            DLOG(INFO) << "EventLoop exiting...";
+            LOG(INFO) << "EventLoop exiting...";
         }
 
         void EventLoop::Quit()

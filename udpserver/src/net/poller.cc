@@ -38,7 +38,7 @@ namespace fx
 
             int nevents = ::epoll_wait(epoll_fd_, &events_[0], events_.size(), timeout_in_ms);
             fx::base::time::TimeStamp now  = fx::base::time::Now();
-            DLOG(INFO) << "epoll_wait return " << nevents;
+            //DLOG(INFO) << "epoll_wait return " << nevents;
             if (nevents > 0)
             {
                 FillActiveChannels(nevents, active_channels);

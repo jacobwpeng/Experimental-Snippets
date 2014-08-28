@@ -28,7 +28,7 @@ using fx::net::EventLoop;
 fx::net::EventLoop * ArenaServer::loop = NULL;
 
 ArenaServer::ArenaServer(const std::string& ip, int port)
-    :ip_(ip), port_(port), kMaxPersonInList(20)
+    :ip_(ip), port_(port), kMaxPersonInList(200)
 {
 }
 
@@ -259,10 +259,12 @@ int ArenaServer::OnUpdateSelf(const arenasvrd::Request & req, arenasvrd::Respons
     }
 
     ListType::NodeId list_node_id = list_iter->second->PushBack(list_node);
+    assert (list_node_id != ListType::kInvalidNodeId);
     if (iter != active_->end())
     {
         /* update info in active */
         iter.Value().rank = current_rank;
+        iter.Value().list_node_id = list_node_id;
     }
     else
     {

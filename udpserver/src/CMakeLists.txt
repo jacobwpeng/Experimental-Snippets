@@ -10,7 +10,7 @@ find_package(Boost COMPONENTS REQUIRED system thread)
 
 add_subdirectory(base)
 add_subdirectory(net)
-add_subdirectory(server EXCLUDE_FROM_ALL)
+add_subdirectory(server)
 #ADD_SUBDIRECTORY(examples)
 #ENABLE_TESTING()
 #ADD_SUBDIRECTORY(tests)

@@ -68,7 +68,6 @@ namespace fx
         {
             const size_t kMaxUdpMessageSize = 1 << 16; //64KiB
             char in[kMaxUdpMessageSize];
-            char out[kMaxUdpMessageSize];
             struct sockaddr_in ca;
             socklen_t len = sizeof(ca);
             ssize_t bytes = ::recvfrom(fd_, in, sizeof(in), MSG_DONTWAIT, reinterpret_cast<struct sockaddr *>(&ca), &len);
@@ -79,19 +78,20 @@ namespace fx
             }
             if (mcb_)
             {
-                ssize_t out_bytes = mcb_(in, bytes, out);
-                if (out_bytes < 0)
+                std::string out;
+                int ret = mcb_(in, bytes, &out);
+                if (ret < 0)
                 {
-                    LOG(WARNING) << "MessageCallback return " << out_bytes;
+                    LOG(WARNING) << "MessageCallback return " << ret;
                 }
-                else if (static_cast<size_t>(out_bytes) > kMaxUdpMessageSize)
+                else if (out.size() > kMaxUdpMessageSize)
                 {
-                    LOG(WARNING) << "bytes overflow, truncate output";
-                    ::sendto(fd_, out, kMaxUdpMessageSize, MSG_DONTWAIT, reinterpret_cast<struct sockaddr *>(&ca), sizeof(ca));
+                    LOG(WARNING) << "reply size[" << out.size() << "] is too larger, truncate reply to 64KiB";
+                    ::sendto(fd_, out.data(), kMaxUdpMessageSize, MSG_DONTWAIT, reinterpret_cast<struct sockaddr *>(&ca), sizeof(ca));
                 }
                 else
                 {
-                    ::sendto(fd_, out, out_bytes, MSG_DONTWAIT, reinterpret_cast<struct sockaddr *>(&ca), sizeof(ca));
+                    ::sendto(fd_, out.data(), out.size(), MSG_DONTWAIT, reinterpret_cast<struct sockaddr *>(&ca), sizeof(ca));
                 }
             }
         }

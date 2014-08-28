@@ -124,7 +124,9 @@ namespace fx
                             md_->tail = node->prev;
                         }
                         --md_->size;
-                        return node->val;
+                        T val = node->val;
+                        ml_->FreeSlice(id);
+                        return val;
                     }
 
                     NodeId PushFront(T val)
@@ -210,7 +212,11 @@ namespace fx
                         return back->val;
                     }
 
-                    size_t size() const { return md_->size; }
+                    size_t size() const 
+                    { 
+                        assert (ml_->size() == md_->size);
+                        return md_->size; 
+                    }
                     size_t capacity() const { return ml_->capacity(); }
                     bool full() const { return size() == capacity(); }
 

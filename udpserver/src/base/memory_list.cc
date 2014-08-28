@@ -125,8 +125,7 @@ namespace fx
             if (header_->used == id)
             {
                 assert (prev == NULL);
-                assert (next == NULL);
-                header_->used = kInvalidSliceId;
+                header_->used = slice->next;
             }
             //put slice in the front of free list
             SliceId old_head = header_->free;

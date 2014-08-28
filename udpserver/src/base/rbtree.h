@@ -16,6 +16,7 @@
 #include <cassert>
 #include <memory>
 #include <iostream>
+#include <vector>
 #include <boost/scoped_ptr.hpp>
 #include <boost/utility/enable_if.hpp>
 #include <boost/type_traits/is_pod.hpp>
@@ -257,10 +258,10 @@ namespace fx
                         if (right and right->c == kRed)
                         {
                             node_id = RotateLeft(node_id);
+                            node = GetPointer(node_id);
+                            assert (node);
                         }
 
-                        node = GetPointer(node_id);
-                        assert (node);
 
                         RBNode * left = GetPointer(node->l);
                         if (left and left->c == kRed)
@@ -269,11 +270,11 @@ namespace fx
                             if (lol and lol->c == kRed)
                             {
                                 node_id = RotateRight(node_id);
+                                node = GetPointer(node_id);
+                                assert (node);
                             }
                         }
 
-                        node = GetPointer(node_id);
-                        assert (node);
                         right = GetPointer(node->r);
                         left = GetPointer(node->l);
 
@@ -493,6 +494,7 @@ namespace fx
                     {
                         RBNode * node = GetPointer(node_id);
                         assert (node);
+                        assert (node->c == kRed);
 
                         RBNode * left = GetPointer(node->l);
                         assert (left);
@@ -522,10 +524,11 @@ namespace fx
                         assert (node);
 
                         RBNode * left = GetPointer(node->l);
-                        assert (node);
+                        assert (left);
 
                         RBNode * right = GetPointer(node->r);
                         assert (right);
+
                         assert (right->c == kBlack);
                         RBNode * ror = GetPointer(right->r);
                         assert (ror == NULL or ror->c == kBlack);
@@ -552,7 +555,7 @@ namespace fx
                             if (left->c == kBlack)
                             {
                                 RBNode * lol = GetPointer(left->l);
-                                if (lol and lol->c == kBlack)
+                                if (lol == NULL or lol->c == kBlack)
                                 {
                                     node_id = MoveRedLeft(node_id);
                                     node = GetPointer(node_id);
@@ -564,6 +567,7 @@ namespace fx
                         {
                             if (left != NULL and left->c == kRed)
                             {
+                                //borrow from sibling
                                 node_id = RotateRight(node_id);
                                 node = GetPointer(node_id);
                             }
@@ -578,8 +582,8 @@ namespace fx
                             RBNode * right = GetPointer(node->r);
                             if (right and right->c == kBlack)
                             {
-                                RBNode * ror = GetPointer(right->r);
-                                if (ror == NULL or ror->c == kBlack)
+                                RBNode * lor = GetPointer(right->l);
+                                if (lor == NULL or lor->c == kBlack)
                                 {
                                     node_id = MoveRedRight(node_id);
                                     node = GetPointer(node_id);
@@ -591,14 +595,8 @@ namespace fx
                                 NodeId successor_id = GetMin(node->r);
                                 RBNode * successor = GetPointer(successor_id);
                                 assert (successor);
-
-                                std::swap (successor->p, node->p);
-                                std::swap (successor->l, node->l);
-                                std::swap (successor->r, node->r);
-                                std::swap (successor->c, node->c);
-
-                                node_id = successor_id;
-                                node = GetPointer(node_id);
+                                node->k = successor->k;
+                                node->v = successor->v;
                                 node->r = DeleteMin(node->r);
                             }
                             else
@@ -678,13 +676,17 @@ namespace fx
                     size_t Delete(KeyType key)
                     {
                         if (md_->root == kInvalidNodeId) return 0;
+                        RBNode * root = GetPointer(md_->root);
+                        root->c = kRed;
                         try
                         {
                             md_->root = Delete(md_->root, key);
+                            if (md_->root != kInvalidNodeId) GetPointer(md_->root)->c = kBlack;
                             return 1;
                         }
                         catch (int)
                         {
+                            if (md_->root != kInvalidNodeId) GetPointer(md_->root)->c = kBlack;
                             return 0;
                         }
                     }
@@ -706,6 +708,36 @@ namespace fx
                     {
                         return const_iterator(this, Get(md_->root, key));
                     }
+#ifndef NDEBUG
+                    void LevelOrderTraversal()
+                    {
+                        if (md_->root == kInvalidNodeId) return;
+                        std::vector<NodeId> nodes;
+                        nodes.push_back(md_->root);
+
+                        size_t cur = 0, last = 1;
+
+                        while (cur < nodes.size())
+                        {
+                            last = nodes.size();
+
+                            while (cur < last)
+                            {
+                                NodeId now = nodes[cur];
+                                RBNode * node = GetPointer(now);
+                                assert (node);
+
+                                std::cout << node->k << "(" << (node->c == kRed ? "red" : "black") << ")\t";
+                                if (node->l != kInvalidNodeId) nodes.push_back(node->l);
+                                if (node->r != kInvalidNodeId) nodes.push_back(node->r);
+
+                                ++cur;
+                            }
+                            std::cout << '\n';
+                        }
+                        std::cout << "********************************************************************************\n";
+                    }
+#endif
 
                 private:
                     MetaData * md_;

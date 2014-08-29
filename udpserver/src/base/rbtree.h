@@ -29,16 +29,15 @@ namespace fx
     {
         namespace container
         {
-            template <typename _Key, typename _Value, typename KeyEnable = void, typename ValueEnable = void>
+            template <typename _Key, typename _Value, typename Enable = void>
             class RBTree;
 
             template <typename _Key, typename _Value>
-            class RBTree<_Key, _Value, typename boost::enable_if <boost::is_pod<_Key> >::type , typename boost::enable_if< boost::is_pod<_Value> >::type>
+            class RBTree<_Key, _Value, typename boost::enable_if_c<boost::is_pod<_Key>::value and boost::is_pod<_Value>::value >::type>
             {
                 public:
                     typedef RBTree<_Key, _Value, 
-                            typename boost::enable_if <boost::is_pod<_Key> >::type, 
-                            typename boost::enable_if< boost::is_pod<_Value> >::type> ThisType;
+                            typename boost::enable_if_c<boost::is_pod<_Key>::value and boost::is_pod<_Value>::value >::type> ThisType;
                     typedef _Key KeyType;
                     typedef _Value ValueType;
 

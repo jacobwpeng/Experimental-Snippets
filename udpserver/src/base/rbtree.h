@@ -14,13 +14,11 @@
 #define  __RBTREE_H__
 
 #include <cassert>
+#include <cstring>
 #include <memory>
-#include <iostream>
 #include <vector>
-#include <boost/scoped_ptr.hpp>
-#include <boost/utility/enable_if.hpp>
-#include <boost/type_traits/is_pod.hpp>
-#include <boost/type_traits/is_const.hpp>
+#include <iostream>
+#include <type_traits>
 #include "memory_list.h"
 
 namespace fx
@@ -29,17 +27,22 @@ namespace fx
     {
         namespace container
         {
-            template <typename _Key, typename _Value, typename Enable = void>
+            template <typename _Key, typename _Value, typename _Comparator = std::less<_Key>, typename KeyEnable = void, typename ValueEnable = void>
             class RBTree;
 
-            template <typename _Key, typename _Value>
-            class RBTree<_Key, _Value, typename boost::enable_if_c<boost::is_pod<_Key>::value and boost::is_pod<_Value>::value >::type>
+            template <typename _Key, typename _Value, typename _Comparator>
+            class RBTree<_Key, _Value, _Comparator, 
+                  typename std::enable_if <std::is_pod<_Key>::value >::type , typename std::enable_if< std::is_pod<_Value>::value >::type>
             {
                 public:
-                    typedef RBTree<_Key, _Value, 
-                            typename boost::enable_if_c<boost::is_pod<_Key>::value and boost::is_pod<_Value>::value >::type> ThisType;
-                    typedef _Key KeyType;
-                    typedef _Value ValueType;
+                    typedef RBTree<_Key, _Value, _Comparator, 
+                            typename std::enable_if <std::is_pod<_Key>::value >::type, 
+                            typename std::enable_if< std::is_pod<_Value>::value >::type> ThisType;
+                    typedef _Key key_type;
+                    typedef _Value mapped_type;
+                    typedef _Comparator key_compare;
+
+                    typedef struct { key_type first; mapped_type second; } value_type;
 
                 private:
                     typedef fx::base::MemoryList::SliceId NodeId;
@@ -65,15 +68,14 @@ namespace fx
                         NodeId p;               /* parent */
                         NodeId l;               /* left */
                         NodeId r;               /* right */
-                        KeyType k;
-                        ValueType v;
+                        value_type v;
 
-                        void Init(KeyType key, ValueType val)
+                        void Init(key_type key, mapped_type val)
                         {
                             c = kRed;
                             p = l = r = kInvalidNodeId;
-                            k = key;
-                            v = val;
+                            v.first = key;
+                            v.second = val;
                         }
 
                         void FlipColor()
@@ -82,170 +84,100 @@ namespace fx
                         }
                     };
 
-                    template<typename ContainerType>
-                    class ConstIterator;
-
-                    template<typename ContainerType>
-                    class Iterator
+                    template<typename DerivedType, typename ContainerType, typename Pointer, typename Reference>
+                    class IteratorBase
                     {
-                        typedef Iterator Self;
                         public:
-                            Iterator(ContainerType * tree, NodeId id)
-                                :tree_(tree), id_(id)
-                            {
-                            }
-
-                            explicit Iterator(ContainerType * tree = NULL)
-                                :tree_(tree), id_(kInvalidNodeId)
-                            {
-                            }
-
-                            Iterator(const Self& rhs)
-                            {
-                                tree_ = rhs.tree_;
-                                id_ = rhs.id_;
-                            }
-
-                            Self& operator ++ ()
+                            DerivedType& operator++()
                             {
                                 assert (tree_);
-                                if (id_ == kInvalidNodeId) return *this;
+                                assert (id_ != kInvalidNodeId);
                                 id_ = tree_->GetNext(id_);
-                                return *this;
+                                return static_cast<DerivedType&>(*this);
                             }
 
-                            Self & operator -- ()
+                            const DerivedType operator++(int)
                             {
                                 assert (tree_);
-                                if (id_ == kInvalidNodeId)
-                                {
-                                    id_ = tree_->GetMax(tree_->md_->root);
-                                }
-                                else
-                                {
-                                    id_ = tree_->GetPrev(id_);
-                                }
-                                return *this;
+                                assert (id_ != kInvalidNodeId);
+                                auto result = static_cast<DerivedType&>(*this);
+                                ++*this;
+                                return result;
                             }
 
-                            Self& operator = (const Self& rhs)
-                            {
-                                tree_ = rhs.tree_;
-                                id_ = rhs.id_;
-                                return *this;
-                            }
-
-                            bool operator == (const Self& rhs) const
+                            template<typename DerivedType2, typename ContainerType2, typename Pointer2, typename Reference2>
+                            bool operator == (const IteratorBase<DerivedType2, ContainerType2, Pointer2, Reference2> & rhs) const
                             {
                                 return tree_ == rhs.tree_ and id_ == rhs.id_;
                             }
 
-                            bool operator != (const Self& rhs) const
+                            template<typename DerivedType2, typename ContainerType2, typename Pointer2, typename Reference2>
+                            bool operator != (const IteratorBase<DerivedType2, ContainerType2, Pointer2, Reference2> & rhs) const
                             {
-                                return not (*this == rhs);
+                                return !(*this == rhs);
                             }
 
-                            KeyType Key() const { return tree_->GetPointer(id_)->k; }
-                            ValueType Value() const { return tree_->GetPointer(id_)->v; }
-                            ValueType & Value() { return tree_->GetPointer(id_)->v; }
+                            Reference operator* () const { return tree_->GetPointer(id_)->v; }
+                            Pointer operator-> () const { return &**this; }
 
-                        private:
-                            friend class ConstIterator <ContainerType>;
+                        protected:
+                            template<typename DerivedType2, typename ContainerType2, typename Pointer2, typename Reference2>
+                            friend class IteratorBase;
+
+                            IteratorBase(ContainerType * tree = NULL, NodeId id = kInvalidNodeId)
+                                :tree_(tree), id_(id)
+                            {
+                            }
+
+                        protected:
                             ContainerType * tree_;
                             NodeId id_;
                     };
-
-                    template<typename ContainerType>
-                    class ConstIterator
-                    {
-                        typedef ConstIterator Self;
-                        public:
-                            ConstIterator(const ContainerType * tree, NodeId id)
-                                :tree_(tree), id_(id)
-                            {
-                            }
-
-                            explicit ConstIterator(const ContainerType * tree = NULL)
-                                :tree_(tree), id_(kInvalidNodeId)
-                            {
-                            }
-
-                            ConstIterator(const Self& rhs)
-                            {
-                                tree_ = rhs.tree_;
-                                id_ = rhs.id_;
-                            }
-
-                            Self& operator ++ ()
-                            {
-                                assert (id_ != kInvalidNodeId);
-                                id_ = tree_->GetNext(id_);
-                                return *this;
-                            }
-
-                            Self& operator = (const Self& rhs)
-                            {
-                                tree_ = rhs.tree_;
-                                id_ = rhs.id_;
-                                return *this;
-                            }
-
-                            Self& operator = (const Iterator<ContainerType>& rhs)
-                            {
-                                tree_ = rhs.tree_;
-                                id_ = rhs.id_;
-                                return *this;
-                            }
-
-                            bool operator == (const Self& rhs) const
-                            {
-                                return tree_ == rhs.tree_ and id_ == rhs.id_;
-                            }
-
-                            bool operator != (const Self& rhs) const
-                            {
-                                return not (*this == rhs);
-                            }
-
-                            KeyType Key() const { return tree_->GetPointer(id_)->k; }
-                            ValueType Value() const { return tree_->GetPointer(id_)->v; }
-                        private:
-                            const ContainerType * tree_;
-                            NodeId id_;
-                    };
-
-                    RBTree()
-                    {
-                    }
+                    template<typename DerivedType, typename ContainerType, typename Pointer, typename Reference>
+                    friend class IteratorBase;
 
                 public:
-                    typedef Iterator<ThisType> iterator;
-                    typedef ConstIterator<ThisType> const_iterator;
-                    iterator begin() 
-                    { 
-                        if (md_->root == kInvalidNodeId) return iterator(this);
-                        else return iterator(this, GetMin(md_->root));
-                    }
-                    iterator end() { return iterator(this); }
+                    static const size_t kHeaderSize = sizeof(MetaData);
+                    class iterator;
+                    friend class iterator;
 
-                    const_iterator begin() const
+                    class const_iterator : public std::iterator<std::forward_iterator_tag, value_type>, 
+                                           public IteratorBase<const_iterator, const ThisType, const value_type*, const value_type&>
                     {
-                        if (md_->root == kInvalidNodeId) return const_iterator(this);
-                        else return const_iterator(this, GetMin(md_->root));
-                    }
+                        public:
+                            const_iterator() {}
 
-                    const_iterator end() const { return const_iterator(this); }
+                            const_iterator(iterator iter)
+                                :IteratorBase<const_iterator, const ThisType, const value_type*, const value_type&>(iter.tree_, iter.id_){}
+                            const_iterator(const ThisType * tree, NodeId id)
+                                :IteratorBase<const_iterator, const ThisType, const value_type*, const value_type&>(tree, id) { } 
+                            friend class RBTree;
+                    };
+                    friend class const_iterator;
+
+                    class iterator : public std::iterator<std::forward_iterator_tag, value_type>, 
+                                     public IteratorBase<iterator, ThisType, value_type*, value_type&>
+                    {
+                        public:
+                            iterator() {}
+
+                        private:
+                            iterator(ThisType * tree, NodeId id) :IteratorBase<iterator, ThisType, value_type*, value_type&>(tree, id) { } 
+                            friend class RBTree;
+                            friend class const_iterator;
+                    };
 
                 private:
                     RBNode * GetPointer(NodeId id)
                     {
                         if (id == kInvalidNodeId) return NULL;
-                        return reinterpret_cast<RBNode*>( ml_->GetBuffer(id) );
+                        return reinterpret_cast<RBNode*>(ml_->GetBuffer(id));
                     }
 
                     const RBNode * GetPointer(NodeId id) const
                     {
-                        return const_cast<ThisType*>(this)->GetPointer(id);
+                        if (id == kInvalidNodeId) return NULL;
+                        return reinterpret_cast<const RBNode*>(ml_->GetBuffer(id));
                     }
 
                     NodeId KeepBalance(NodeId node_id)
@@ -260,7 +192,6 @@ namespace fx
                             node = GetPointer(node_id);
                             assert (node);
                         }
-
 
                         RBNode * left = GetPointer(node->l);
                         if (left and left->c == kRed)
@@ -294,6 +225,8 @@ namespace fx
                         assert (right);
                         assert (right->c == kRed);
                         node->r = right->l;
+                        RBNode * lor = GetPointer(right->l);
+                        if (lor) lor->p = id;
                         right->l = id;
                         right->p = node->p;
                         node->p = right_id;
@@ -315,6 +248,9 @@ namespace fx
                         assert (left->c == kRed);
 
                         node->l = left->r;
+                        RBNode * rol = GetPointer(left->r);
+                        if (rol) rol->p = id;
+
                         left->r = id;
                         left->p = node->p;
                         node->p = left_id;
@@ -339,12 +275,11 @@ namespace fx
                         right->FlipColor();
                     }
 
-                    NodeId Put(NodeId node_id, KeyType key, ValueType val)
+                    NodeId Put(NodeId node_id, key_type key, mapped_type val)
                     {
                         RBNode * node = GetPointer(node_id);
                         if (node == NULL)
                         {
-                            if (ml_->size() == ml_->capacity()) throw 0;
                             NodeId new_id = ml_->GetSlice();
                             RBNode * new_node = GetPointer(new_id);
                             new_node->Init(key, val);
@@ -353,33 +288,35 @@ namespace fx
                         }
                         else
                         {
-                            if (key > node->k)
-                            {
-                                node->r = Put(node->r, key, val);
-                                node_id = KeepBalance(node_id);
-                            }
-                            else if (key < node->k)
+                            if (comp_(key, node->v.first))
                             {
                                 node->l = Put(node->l, key, val);
+                                GetPointer(node->l)->p = node_id;
+                                node_id = KeepBalance(node_id);
+                            }
+                            else if(comp_(node->v.first, key))
+                            {
+                                node->r = Put(node->r, key, val);
+                                GetPointer(node->r)->p = node_id;
                                 node_id = KeepBalance(node_id);
                             }
                             else
                             {
-                                node->v = val;
+                                node->v.second = val;
                             }
                             return node_id;
                         }
                     }
 
-                    NodeId Get(NodeId id, KeyType key) const
+                    NodeId Get(NodeId id, key_type key) const
                     {
                         const RBNode * node = GetPointer(id);
                         if (not node) return kInvalidNodeId;
-                        else if (node->k < key)
+                        else if (comp_(node->v.first, key))
                         {
                             return Get(node->r, key);
                         }
-                        else if (node->k > key)
+                        else if (comp_(key, node->v.first))
                         {
                             return Get(node->l, key);
                         }
@@ -466,8 +403,12 @@ namespace fx
                         RBNode * node = GetPointer(node_id);
                         assert (node);
 
-                        if (node->l == kInvalidNodeId)
+                        if (node->l == kInvalidNodeId) /* 3-Node at buttom, ie. node->c == kRed */
                         {
+                            assert (node->c == kRed);
+#ifndef NDEBUG
+                            ::memset(node, 0x0, sizeof(RBNode));
+#endif
                             ml_->FreeSlice(node_id);
                             --md_->size;
                             return kInvalidNodeId;
@@ -478,14 +419,14 @@ namespace fx
                         if (left->c == kBlack)
                         {
                             RBNode * lol = GetPointer(left->l);
-                            if (lol == NULL or lol->c == kBlack)
+                            if (lol == NULL or lol->c == kBlack) /* encountering a 2-Node */
                             {
                                 node_id = MoveRedLeft(node_id);
+                                node = GetPointer(node_id);
                             }
                         }
 
-                        node = GetPointer(node_id);
-                        node->l = DeleteMin(node->l);
+                        node->l = DeleteMin(node->l); /* process recursively */
                         return KeepBalance(node_id);
                     }
 
@@ -542,19 +483,20 @@ namespace fx
                         return node_id;
                     }
 
-                    NodeId Delete(NodeId node_id, KeyType key)
+                    NodeId Delete(NodeId node_id, key_type key)
                     {
+                        /* pre-condition: current node is not a 2-Node */
                         RBNode * node = GetPointer(node_id);
                         assert (node);
 
                         RBNode * left = GetPointer(node->l);
-                        if (key < node->k)
+                        if (comp_(key, node->v.first))
                         {
-                            if (left == NULL) throw 0;
+                            if (left == NULL) throw 0; /* no such key */
                             if (left->c == kBlack)
                             {
                                 RBNode * lol = GetPointer(left->l);
-                                if (lol == NULL or lol->c == kBlack)
+                                if (lol == NULL or lol->c == kBlack) /* encountering 2-Node */
                                 {
                                     node_id = MoveRedLeft(node_id);
                                     node = GetPointer(node_id);
@@ -571,8 +513,11 @@ namespace fx
                                 node = GetPointer(node_id);
                             }
 
-                            if (key == node->k and node->r == kInvalidNodeId)
+                            if (not comp_(key, node->v.first) and not comp_(node->v.first, key) and node->r == kInvalidNodeId)
                             {
+#ifndef NDEBUG
+                                ::memset(node, 0x0, sizeof(RBNode));
+#endif
                                 ml_->FreeSlice(node_id);
                                 --md_->size;
                                 return kInvalidNodeId;
@@ -589,18 +534,69 @@ namespace fx
                                 }
                             }
 
-                            if (key == node->k)
+                            if (not comp_(key, node->v.first) and not comp_(node->v.first, key))
                             {
                                 NodeId successor_id = GetMin(node->r);
                                 RBNode * successor = GetPointer(successor_id);
                                 assert (successor);
-                                node->k = successor->k;
-                                node->v = successor->v;
+                                assert (successor->l == kInvalidNodeId);
+                                /* DON'T assign sucessor->v to node->v and Do DeleteMin, cause this will invalidate iter of successor */
+                                NodeId successor_p = successor->p;
+                                NodeId successor_r = successor->r;
+                                if (successor_id != node->r)
+                                {
+                                    RBNode * p = GetPointer(node->p);
+                                    if (p)
+                                    {
+                                        if (p->l == node_id) p->l = successor_id;
+                                        else p->r = successor_id;
+                                    }
+                                    RBNode * l = GetPointer(node->l);
+                                    if (l) l->p = successor_id;
+                                    RBNode * r = GetPointer(node->r);
+                                    if (r) r->p = successor_id;
+
+                                    p = GetPointer(successor_p);
+                                    assert (p);
+                                    assert (p->l == successor_id);
+                                    p->l = node_id;
+                                    r = GetPointer(successor_r);
+                                    if (r) r->p = node_id;
+                                    std::swap(successor->p, node->p);
+                                    std::swap(successor->l, node->l);
+                                    std::swap(successor->r, node->r);
+                                    std::swap(successor->c, node->c);
+                                }
+                                else
+                                {
+                                    assert (node_id == successor_p);
+                                    RBNode * p = GetPointer(node->p);
+                                    if (p)
+                                    {
+                                        if (p->l == node_id) p->l = successor_id;
+                                        else p->r = successor_id;
+                                    }
+                                    RBNode * l = GetPointer(node->l);
+                                    if (l) l->p = successor_id;
+                                    RBNode * r = GetPointer(successor_r);
+                                    if (r) r->p = node_id;
+
+                                    successor->p = node->p;
+                                    node->p = successor_id;
+                                    successor->l = node->l;
+                                    node->l = kInvalidNodeId;
+                                    successor->r = node_id;
+                                    node->r = successor->r;
+                                    std::swap(successor->c, node->c);
+                                }
+
+                                node = successor;
+                                node_id = successor_id;
                                 node->r = DeleteMin(node->r);
                             }
                             else
                             {
-                                if (node->r == kInvalidNodeId) throw 0;
+                                if (node->r == kInvalidNodeId) throw 0; /* no such key */
                                 node->r = Delete(node->r, key);
                             }
                         }
@@ -608,10 +604,10 @@ namespace fx
                     }
 
                 public:
-                    static RBTree * CreateFrom(void * buf, size_t len)
+                    static std::unique_ptr<RBTree> CreateFrom(void * buf, size_t len)
                     {
                         if (len < sizeof(MetaData)) return NULL;
-                        std::auto_ptr<RBTree> ptr(new RBTree);
+                        std::unique_ptr<RBTree> ptr(new RBTree);
                         ptr->md_ = reinterpret_cast<MetaData*>(buf);
                         ptr->md_->magic_number = kMagicNumber;
                         ptr->md_->root = kInvalidNodeId;
@@ -620,94 +616,161 @@ namespace fx
                         uintptr_t start = reinterpret_cast<uintptr_t>(buf) + sizeof(MetaData);
                         ptr->ml_.reset(fx::base::MemoryList::CreateFrom(reinterpret_cast<void*>(start), len - sizeof(MetaData), sizeof(RBNode)));
                         if (ptr->ml_ == NULL) return NULL;
-                        return ptr.release();
+                        return std::move(ptr);
                     }
 
-                    static RBTree * RestoreFrom(void * buf, size_t len)
+                    static std::unique_ptr<RBTree> RestoreFrom(void * buf, size_t len)
                     {
                         if (len < sizeof(MetaData)) return NULL;
                         MetaData * md = reinterpret_cast<MetaData*>(buf);
                         if (md->magic_number != kMagicNumber) return NULL;
 
-                        std::auto_ptr<RBTree> ptr(new RBTree);
+                        std::unique_ptr<RBTree> ptr(new RBTree);
                         ptr->md_ = md;
                         uintptr_t start = reinterpret_cast<uintptr_t>(buf) + sizeof(MetaData);
-                        ptr->ml_.reset(fx::base::MemoryList::CreateFrom(reinterpret_cast<void*>(start), len - sizeof(MetaData), sizeof(RBNode)));
+                        ptr->ml_.reset(fx::base::MemoryList::RestoreFrom(reinterpret_cast<void*>(start), len - sizeof(MetaData), sizeof(RBNode)));
                         if (ptr->ml_ == NULL) return NULL;
-                        return ptr.release();
+                        return std::move(ptr);
                     }
+
+                    iterator begin() 
+                    { 
+                        if (md_->root == kInvalidNodeId) return iterator(this, kInvalidNodeId);
+                        else return iterator(this, GetMin(md_->root));
+                    }
+                    iterator end() { return iterator(this, kInvalidNodeId); }
+
+                    const_iterator begin() const
+                    {
+                        if (md_->root == kInvalidNodeId) return const_iterator(this, kInvalidNodeId);
+                        else return const_iterator(this, GetMin(md_->root));
+                    }
+
+                    const_iterator end() const { return const_iterator(this, kInvalidNodeId); }
 
                     size_t size() const 
                     {
                         return md_->size;
                     }
 
-                    size_t depth() const
-                    {
-                        return md_->depth;
-                    }
-
-                    size_t capacity() const
+                    size_t max_size() const
                     {
                         return ml_->capacity();
                     }
 
-                    bool Put(KeyType key, ValueType val)
+                    std::pair<iterator, bool> insert(const std::pair<key_type, mapped_type> val)
                     {
-                        try
+                        auto iter = find(val.first);
+                        if (iter == end())
                         {
-                            md_->root = Put(md_->root, key, val);
+                            if (size() == max_size()) return std::make_pair(end(), false);
+                            md_->root = Put(md_->root, val.first, val.second);
+                            RBNode * node = GetPointer(md_->root);
+                            assert (node);
+                            if (node->c == kRed)
+                            {
+                                node->c = kBlack;
+                                ++md_->depth;
+                            }
+                            return std::make_pair(find(val.first), true);
                         }
-                        catch(int)
-                        {
-                            return false;
-                        }
-                        RBNode * node = GetPointer(md_->root);
-                        assert (node);
-                        if (node->c == kRed)
-                        {
-                            node->c = kBlack;
-                            ++md_->depth;
-                        }
-                        return true;
+                        return std::make_pair(iter, false);
                     }
 
-                    size_t Delete(KeyType key)
+                    mapped_type & operator[](key_type key)
+                    {
+                        auto iter = find(key);
+                        if (iter == end())
+                        {
+                            mapped_type m;
+                            auto pair = insert(std::make_pair(key, m));
+                            if (pair.first == end()) throw std::bad_alloc();
+                            else return pair.first->second;
+                        }
+                        else
+                        {
+                            return iter->second;
+                        }
+                    }
+
+                    size_t erase(key_type key)
                     {
                         if (md_->root == kInvalidNodeId) return 0;
                         RBNode * root = GetPointer(md_->root);
                         root->c = kRed;
+                        size_t count = 0;
                         try
                         {
                             md_->root = Delete(md_->root, key);
-                            if (md_->root != kInvalidNodeId) GetPointer(md_->root)->c = kBlack;
-                            return 1;
+                            count = 1;
                         }
                         catch (int)
                         {
-                            if (md_->root != kInvalidNodeId) GetPointer(md_->root)->c = kBlack;
-                            return 0;
+                            count = 0;
                         }
+                        if (md_->root != kInvalidNodeId) GetPointer(md_->root)->c = kBlack;
+                        return count;
+                        //auto iter = find(key);
+                        //return erase(iter);
                     }
 
-                    void Clear()
+                    size_t erase(const const_iterator& iter)
                     {
-                        ml_.reset (fx::base::MemoryList::CreateFrom(ml_->start(), ml_->BufferLength(), sizeof(RBNode)));
+                        assert (iter.tree_ == this);
+                        if (iter == end()) return 0;
+                        return erase(iter->first);
+                    }
+                    //    if (md_->root == kInvalidNodeId) return 0;
+                    //    else if (iter == end()) return 0;
+                    //    else
+                    //    {
+                    //        NodeId node_id = iter.id_;
+                    //        RBNode * node = GetPointer(node_id);
+                    //        RBNode * p = GetPointer(node->p);
+                    //        if (p)
+                    //        {
+                    //            if (p->l == node_id)
+                    //            {
+                    //                p->l = Delete(node_id, iter->first);
+                    //                if (p->l != kInvalidNodeId) p->l = KeepBalance(p->l);
+                    //            }
+                    //            else
+                    //            {
+                    //                p->r = Delete(node_id, iter->first);
+                    //                if (p->r != kInvalidNodeId) p->r = KeepBalance(p->r);
+                    //            }
+                    //        }
+                    //        else
+                    //        {
+                    //            md_->root = Delete(node_id, iter->first);
+                    //        }
+                    //        return 1;
+                    //    }
+                    //}
+
+                    void clear()
+                    {
+                        ml_->clear();
                         md_->size = 0;
                         md_->depth = 0;
                         md_->root = kInvalidNodeId;
                     }
 
-                    iterator Get(KeyType key)
+                    size_t count(key_type key)
+                    {
+                        return find(key) == end() ? 0 : 1;
+                    }
+
+                    iterator find(key_type key)
                     {
                         return iterator(this, Get(md_->root, key));
                     }
 
-                    const_iterator Get(KeyType key) const
+                    const_iterator find(key_type key) const
                     {
                         return const_iterator(this, Get(md_->root, key));
                     }
-#ifndef NDEBUG
+
                     void LevelOrderTraversal()
                     {
                         if (md_->root == kInvalidNodeId) return;
@@ -726,21 +789,21 @@ namespace fx
                                 RBNode * node = GetPointer(now);
                                 assert (node);
 
-                                std::cout << node->k << "(" << (node->c == kRed ? "red" : "black") << ")\t";
+                                std::cout << node->v.first << "(" << (node->c == kRed ? "red" : "black") << " " 
+                                    << now << " " << node->p << " " << node->l << " " << node->r << ")\t";
                                 if (node->l != kInvalidNodeId) nodes.push_back(node->l);
                                 if (node->r != kInvalidNodeId) nodes.push_back(node->r);
 
                                 ++cur;
                             }
-                            std::cout << '\n';
+                            std::cout << "\n********************************************************************************\n";
                         }
                         std::cout << "********************************************************************************\n";
                     }
-#endif
-
                 private:
                     MetaData * md_;
-                    boost::scoped_ptr<fx::base::MemoryList> ml_;
+                    std::unique_ptr<fx::base::MemoryList> ml_;
+                    key_compare comp_;
             };
         }
     }

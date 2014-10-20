@@ -11,10 +11,7 @@
  */
 
 #include "arena_server.h"
-#include <sstream>
-#include <boost/bind.hpp>
-#include <boost/format.hpp>
-#include <boost/typeof/typeof.hpp>
+#include <functional>
 #include <glog/logging.h>
 
 #include "udp_server.h"
@@ -28,7 +25,7 @@ using fx::net::EventLoop;
 fx::net::EventLoop * ArenaServer::loop = NULL;
 
 ArenaServer::ArenaServer(const std::string& ip, int port)
-    :ip_(ip), port_(port), kMaxPersonInList(200)
+    :ip_(ip), port_(port)
 {
 }
 
@@ -41,13 +38,13 @@ int ArenaServer::Init(const std::string& conf_path)
     conf_.reset (ArenaConf::ParseConf(conf_path));
     if (conf_ == NULL) return -1;
 
-    std::ostringstream oss;
-    oss << conf_->mmap_path() << "/arenasvrd_mmap_%u";
-    std::string path_fmt = oss.str();
     for (unsigned i = 0; i <= conf_->RankNumber(); ++i)
     {
-        std::string path = boost::str(boost::format(path_fmt) % i);
-        std::auto_ptr<fx::base::MMapFile> file(new fx::base::MMapFile(path, conf_->mmap_size(), fx::base::MMapFile::create_if_not_exists));
+        char buf[256];
+        int count = ::snprintf(buf, sizeof(buf), "%s/arenasvrd_mmap_%u", conf_->mmap_path().c_str(), i);
+        CHECK(count > 0 and static_cast<size_t>(count) < sizeof(buf)) << "snprintf failed";
+        std::string path(buf, count);
+        std::unique_ptr<fx::base::MMapFile> file(new fx::base::MMapFile(path, conf_->mmap_size(), fx::base::MMapFile::create_if_not_exists));
 
         if (not file->Inited())
         {
@@ -57,10 +54,11 @@ int ArenaServer::Init(const std::string& conf_path)
         // i = 0 for rbtree
         if (i == 0)
         {
-            active_.reset (TreeType::RestoreFrom(file->start(), file->size()));
+            active_ = MapType::RestoreFrom(file->start(), file->size());
             if (active_ == NULL)
             {
-                active_.reset (TreeType::CreateFrom(file->start(), file->size()));
+                LOG(WARNING) << "MapType::RestoreFrom failed, try Create";
+                active_ = MapType::CreateFrom(file->start(), file->size());
                 if (active_ == NULL)
                 {
                     LOG(ERROR) << "Create RBTree failed.";
@@ -70,32 +68,35 @@ int ArenaServer::Init(const std::string& conf_path)
         }
         else
         {
-            std::auto_ptr<ListType> list(ListType::RestoreFrom(file->start(), file->size()));
-            if (list.get() == NULL)
+            std::unique_ptr<ListType> list = ListType::RestoreFrom(file->start(), file->size());
+            if (list == NULL)
             {
-                list.reset (ListType::CreateFrom(file->start(), file->size()));
-                if (list.get() == NULL)
+                LOG(WARNING) << "ListType::RestoreFrom failed, try Create, rank = " << i;
+                list = ListType::CreateFrom(file->start(), file->size());
+                if (list == NULL)
                 {
                     LOG(ERROR) << "Create List failed, i[" << i << "]";
                     return -4;
                 }
             }
-            lists_[i] = list.release();
+            lists_[i] = std::move(list);
         }
-        mmaps_[i] = file.release();
+        mmaps_[i] = std::move(file);
     }
     return 0;
 }
 
 void ArenaServer::Start()
 {
+    using namespace std::placeholders;
     assert (conf_ != NULL);
     loop_.reset (new fx::net::EventLoop);
     server_.reset (new UdpServer(loop_.get(), ip_, port_));
-    server_->set_read_callback(boost::bind(&ArenaServer::OnRead, this, _1, _2, _3));
+    server_->set_read_callback(std::bind(&ArenaServer::OnRead, this, _1, _2, _3));
     server_->Start();
     ArenaServer::loop = loop_.get();            /* for signal handler */
     RegisterSignalHandler();
+    loop_->set_period_functor(std::bind(&ArenaServer::ResetData, this, _1));
     loop_->Run();
     LOG(INFO) << "ArenaServer Exit.";
 }
@@ -128,10 +129,6 @@ int ArenaServer::OnRead(const char* in, size_t len, std::string * out)
     LOG(INFO) << request.ShortDebugString();
     switch (request.type())
     {
-        //case arenasvrd::Request_Type_QUERY_SEASON:
-        //    ret = OnQuerySeason(request, &response);
-        //    break;
-
         case arenasvrd::Request_Type_FIND_OPPONENT:
             ret = OnFindOpponent(request, &response);
             break;
@@ -155,68 +152,31 @@ int ArenaServer::OnRead(const char* in, size_t len, std::string * out)
     return 0;
 }
 
-int ArenaServer::OnQuerySeason(const arenasvrd::Request & req, arenasvrd::Response * res)
+void ArenaServer::ResetData(uint64_t iteration)
 {
-    (void)req;
-    (void)res;
-    //assert (res);
-    //res->set_status(arenasvrd::Response_Status_OK);
-    //res->set_season_remaining_time (conf_->SeasonRemainingTime(fx::base::time::Now()));
-    return 0;
+    const unsigned kPeriod = 100;
+
+    if (iteration % kPeriod != 0) return;       /* run every 100 iteration */
+
+    auto seconds_left = conf_->TimeLeftToNextSeason();
+    if (seconds_left >= 30 * 60) return;                /* reset in the last 30 mins */
+
+    active_->clear();
+    for (auto & l : lists_)
+    {
+        l.second->clear();
+    }
 }
 
 int ArenaServer::OnFindOpponent(const arenasvrd::Request & req, arenasvrd::Response * res)
 {
-    unsigned uin = req.self();
+    auto uin = req.self();
     if (uin < 10000) return -1;
     if (req.has_points() == false) return -2;
 
-    unsigned rank = conf_->GetRankByPoints(req.points());
-    BOOST_AUTO (iter, lists_.find(rank));
+    auto rank = conf_->GetRankByPoints(req.points());
+    auto iter = lists_.find(rank);
     assert (iter != lists_.end());
-
-    if (conf_->InSeasonTime() == false)
-    {
-        res->set_status(arenasvrd::Response_Status_NOT_IN_SEASON_TIME);
-    }
-    else
-    {
-        while (iter->second->size() == 0        /* empty */
-                or (iter->second->size() == 1 and iter->second->Back().uin == uin) /* self only */
-                )
-        {
-            if (iter == lists_.begin()) break;
-            else --iter;
-        }
-        if (iter->second->size() == 0)
-        {
-            res->set_status(arenasvrd::Response_Status_NO_OPPONENT);
-        }
-        else if (iter->second->Back().uin == uin)
-        {
-            assert (iter->second->size() >= 2);
-            ListNode self = iter->second->PopBack();            /* pop self out temporarily */
-            ListNode opponent = iter->second->Back();
-            iter->second->PushBack(self);
-            res->set_status(arenasvrd::Response_Status_OK);
-            res->set_opponent (opponent.uin);
-        }
-        else
-        {
-            ListNode opponent = iter->second->Back();
-            res->set_status(arenasvrd::Response_Status_OK);
-            res->set_opponent (opponent.uin);
-        }
-    }
-    return 0;
-}
-
-int ArenaServer::OnUpdateSelf(const arenasvrd::Request & req, arenasvrd::Response * res)
-{
-    unsigned uin = req.self();
-    if (uin < 10000) return -1;
-    if (req.has_points() == false) return -2;
-    unsigned point = req.points();
 
     if (conf_->InSeasonTime() == false)
     {
@@ -224,19 +184,71 @@ int ArenaServer::OnUpdateSelf(const arenasvrd::Request & req, arenasvrd::Respons
         return 0;
     }
 
-    unsigned current_rank = conf_->GetRankByPoints(point);
-    DLOG(INFO) << "[active]Get " << uin;
-    DLOG(INFO) << "current_rank " << current_rank;
-    TreeType::iterator iter = active_->Get(uin);
+    auto others_in_rank = [&](decltype(iter) iter) { 
+                            auto & list = iter->second; 
+                            return list->size() > 0 and (list->size() > 1 or list->back().uin != uin); 
+                        };
+    while (not others_in_rank(iter))
+    {
+        if (iter == lists_.begin()) break;
+        else --iter;
+    }
+
+    if (not others_in_rank(iter))
+    {
+        res->set_status(arenasvrd::Response_Status_NO_OPPONENT);
+        return 0;
+    }
+
+    if (iter->second->back().uin == uin)
+    {
+        auto & list = iter->second;
+        assert (list->size() > 1);
+        auto self = list->pop_back();            /* pop self out temporarily */
+        auto opponent = list->back();
+        auto list_node_id = list->push_back(self);
+        auto self_pos = active_->find(uin);
+        assert (self_pos->first == uin);
+        assert (list_node_id != ListType::kInvalidNodeId);
+        assert (self_pos != active_->end());
+        self_pos->second.list_node_id = list_node_id;
+        res->set_status(arenasvrd::Response_Status_OK);
+        res->set_opponent (opponent.uin);
+    }
+    else
+    {
+        auto opponent = iter->second->back();
+        res->set_status(arenasvrd::Response_Status_OK);
+        res->set_opponent (opponent.uin);
+    }
+    return 0;
+}
+
+int ArenaServer::OnUpdateSelf(const arenasvrd::Request & req, arenasvrd::Response * res)
+{
+    auto uin = req.self();
+    if (uin < 10000) return -1;
+    if (req.has_points() == false) return -2;
+    auto point = req.points();
+
+    if (conf_->InSeasonTime() == false)
+    {
+        res->set_status(arenasvrd::Response_Status_NOT_IN_SEASON_TIME);
+        return 0;
+    }
+
+    auto current_rank = conf_->GetRankByPoints(point);
+    auto self_pos = active_->find(uin);
     ListNode list_node;
-    if (iter != active_->end())
+    if (self_pos != active_->end())
     {
         /* unlink from old rank list */
-        TreeNode node = iter.Value();
-        unsigned old_rank = node.rank;
-        BOOST_AUTO (list_iter, lists_.find(old_rank));
-        assert (list_iter != lists_.end());
-        list_node = list_iter->second->Unlink(node.list_node_id);
+        auto node = self_pos->second;
+        auto old_rank = node.rank;
+        auto rank_pos = lists_.find(old_rank);
+        assert (rank_pos != lists_.end());
+        list_node = rank_pos->second->Unlink(node.list_node_id);
+        auto victim_iter = active_->find(list_node.uin);
         assert (list_node.uin == uin);
     }
 
@@ -245,26 +257,27 @@ int ArenaServer::OnUpdateSelf(const arenasvrd::Request & req, arenasvrd::Respons
     list_node.rank = current_rank;
     list_node.points = point;
 
-    BOOST_AUTO (list_iter, lists_.find(current_rank));
-    assert (list_iter != lists_.end());
+    auto rank_pos = lists_.find(current_rank);
+    assert (rank_pos != lists_.end());
 
-    /* check new rank list has enough space */
-    if (list_iter->second->size() >= kMaxPersonInList)      /* reach upper limit */
+    /* check if new rank list has enough space */
+    if (rank_pos->second->size() >= kMaxPersonInList)      /* reach upper limit */
     {
         /* remove Least Recently Used node */
-        ListNode front = list_iter->second->PopFront();
-        DLOG(INFO) << "[active]Delete " << front.uin;
-        size_t count = active_->Delete(front.uin);
+        auto front = rank_pos->second->pop_front();
+        size_t count = active_->erase(front.uin);
         assert (count == 1);
     }
 
-    ListType::NodeId list_node_id = list_iter->second->PushBack(list_node);
+    auto list_node_id = rank_pos->second->push_back(list_node);
     assert (list_node_id != ListType::kInvalidNodeId);
-    if (iter != active_->end())
+    //CAUTION : make sure your MapType DOESNOT invalidated iter by the previous pertential erase operation
+    //self_pos = active_->find(uin);
+    if (self_pos != active_->end())
     {
         /* update info in active */
-        iter.Value().rank = current_rank;
-        iter.Value().list_node_id = list_node_id;
+        self_pos->second.rank = current_rank;
+        self_pos->second.list_node_id = list_node_id;
     }
     else
     {
@@ -272,10 +285,9 @@ int ArenaServer::OnUpdateSelf(const arenasvrd::Request & req, arenasvrd::Respons
         TreeNode node;
         node.rank = current_rank;
         node.list_node_id = list_node_id;
-        DLOG(INFO) << "[active]Put " << uin;
-        bool ok = active_->Put(uin, node);
-        assert (ok);
-        (void) ok;
+        auto res = active_->insert(std::make_pair(uin, node));
+        assert (res.second);
+        (void) res;
     }
     res->set_status(arenasvrd::Response_Status_OK);
     return 0;

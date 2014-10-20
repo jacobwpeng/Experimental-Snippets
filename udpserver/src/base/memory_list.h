@@ -54,11 +54,13 @@ namespace fx
                 SliceId GetSlice();
                 void FreeSlice(SliceId id);
                 void * GetBuffer(SliceId id);
+                const void * GetBuffer(SliceId id) const;
                 size_t BufferLength() const { return header_->buffer_length; }
                 size_t capacity() const { return capacity_; }
                 size_t size() const { return header_->size; }
                 void * start() const { return start_; }
                 bool full() const { return header_->size == capacity_; }
+                void clear();
 
             private:
                 void MakeSliceList();

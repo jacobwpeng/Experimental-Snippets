@@ -46,13 +46,15 @@ namespace fx
                 ++iteration_;
                 //DLOG(INFO) << "now[" << now << "], iteration[" << iteration_ << "], timeout[" << timeout << "]";
 
-                BOOST_FOREACH(Channel * channel, channels)
+                for(auto channel : channels)
                 {
                     channel->HandleEvents();
                 }
                 if (channels.size() == 0) ++idle;
                 else idle = 0;
                 channels.clear();
+
+                if (period_functor_) period_functor_(iteration_);
 
                 if (idle >= 100) timeout = idle_time_;
                 else timeout = wait_time_;

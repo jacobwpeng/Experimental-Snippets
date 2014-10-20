@@ -45,9 +45,9 @@ TEST_F(MemoryListUnittest, Create)
     boost::scoped_ptr<MemoryList> ml(MemoryList::CreateFrom(buf, sizeof(buf), 20));
     EXPECT_TRUE (ml != NULL);
     EXPECT_EQ (ml->BufferLength(), sizeof(buf));
-    // header -> 48Byte
+    // header -> kHeaderSize
     // floor((65536 - 48) / (20 + 8)) == 2338
-    EXPECT_EQ (ml->capacity(), 2338);
+    EXPECT_EQ (ml->capacity(), (sizeof(buf) - MemoryList::kHeaderSize) / (20+8));
     EXPECT_EQ (0, ml->size());
     EXPECT_EQ (buf, ml->start());
     EXPECT_FALSE (ml->full());
@@ -163,4 +163,35 @@ TEST_F(MemoryListUnittest, Restore)
             EXPECT_TRUE (::memcmp(&element, ptr, sizeof(Element)) == 0);
         }
     }
+}
+
+TEST_F(MemoryListUnittest, clear)
+{
+    const size_t kBufSize = 1 << 16;            /* 64 KiB */
+    char buf[kBufSize];
+    boost::scoped_ptr<MemoryList> ml(MemoryList::CreateFrom(buf, kBufSize, 20));
+    ASSERT_TRUE (ml != NULL);
+
+    EXPECT_EQ(ml->size(), 0u);
+    ml->GetSlice();
+    EXPECT_EQ(ml->size(), 1u);
+    ml->clear();
+    EXPECT_EQ(ml->size(), 0u);
+
+    unsigned size = 0;
+    while (1)
+    {
+        MemoryList::SliceId id = ml->GetSlice();
+        if (id != MemoryList::kInvalidSliceId)
+        {
+            EXPECT_EQ (id, size);
+            ++size;
+        }
+        else break;
+    }
+    EXPECT_EQ (ml->size(), size);
+    ml->clear();
+    EXPECT_EQ(ml->size(), 0u);
+    auto id = ml->GetSlice();
+    EXPECT_EQ(id, 0u);
 }

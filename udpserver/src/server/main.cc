@@ -21,7 +21,6 @@ int main(int argc, char * argv[])
         ::fprintf(stderr, "Usage : %s conf\n", argv[0]);
         return -1;
     }
-    ::daemon(0, 0);
     google::InitGoogleLogging(argv[0]);
     ArenaServer server("0.0.0.0", 6789);
     int ret = server.Init(argv[1]);

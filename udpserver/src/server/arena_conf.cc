@@ -35,15 +35,19 @@ ArenaConf * ArenaConf::ParseConf(const std::string& cont_path)
         boost::property_tree::read_xml(cont_path, pt, boost::property_tree::xml_parser::no_comments);
         conf->mmap_path_ = pt.get<std::string>("global.mmap.<xmlattr>.path");
         conf->mmap_size_ = pt.get<unsigned>("global.mmap.<xmlattr>.size");
+        conf->season_duration_ = pt.get<unsigned>("global.season_duration.<xmlattr>.val");
+        conf->off_season_duration_ = pt.get<unsigned>("global.off_season_duration.<xmlattr>.val");
+        auto zero_point = pt.get<std::string>("global.zero_point.<xmlattr>.val");
+        conf->zero_point_ = fx::base::time::StringToTime(zero_point.c_str());
 
         unsigned last_id = 0;
         unsigned last_max_value = 0;
-        BOOST_FOREACH (const ptree::value_type & child, pt.get_child("ranks"))
+        for (const ptree::value_type & child : pt.get_child("ranks"))
         {
             if (child.first != "rank") continue;
             const ptree & rank = child.second;
             unsigned id = rank.get<unsigned>("<xmlattr>.id");
-            unsigned max_value = rank.get<unsigned>("<xmlattr>.max_value");
+            unsigned max_value = rank.get<unsigned>("<xmlattr>.max");
 
             if (last_id + 1 != id)
             {
@@ -60,31 +64,6 @@ ArenaConf * ArenaConf::ParseConf(const std::string& cont_path)
             last_max_value = max_value;
             conf->ranks_[max_value] = id;
         }
-
-        BOOST_FOREACH (const ptree::value_type & child, pt.get_child("seasons"))
-        {
-            if (child.first != "season") continue;
-            const ptree & season = child.second;
-
-            std::string start = season.get<std::string>("<xmlattr>.start");
-            std::string end = season.get<std::string>("<xmlattr>.end");
-
-            time_t start_time = fx::base::time::StringToTime(start.c_str());
-            if (start_time == -1)
-            {
-                LOG(ERROR) << "invalid start_time[" << start << "]";
-                return NULL;
-            }
-
-            time_t end_time = fx::base::time::StringToTime(end.c_str());
-            if (end_time == -1)
-            {
-                LOG(ERROR) << "invalid end_time[" << end << "]";
-                return NULL;
-            }
-
-            conf->seasons_[end_time] = start_time;
-        }
     }
     catch(boost::property_tree::ptree_error & error)
     {
@@ -96,7 +75,7 @@ ArenaConf * ArenaConf::ParseConf(const std::string& cont_path)
 
 unsigned ArenaConf::GetRankByPoints(unsigned points) const
 {
-    BOOST_AUTO (iter, ranks_.upper_bound(points));
+    auto iter = ranks_.upper_bound(points);
     assert (iter != ranks_.end());
     return iter->second;
 }
@@ -104,7 +83,25 @@ unsigned ArenaConf::GetRankByPoints(unsigned points) const
 bool ArenaConf::InSeasonTime() const
 {
     time_t now = fx::base::time::Now() / (1000000);
-    BOOST_AUTO (iter, seasons_.lower_bound(now));
-    assert (iter != seasons_.end());
-    return now >= iter->second;
+    unsigned total = season_duration_ + off_season_duration_;
+    if (now < zero_point_) return false;
+
+    const unsigned kSecondsPerDay = 3600 * 24;
+    unsigned delta_seconds = now - zero_point_;
+    unsigned seconds_offset = delta_seconds % (total * kSecondsPerDay);
+    unsigned season_end_time_offset = season_duration_ * kSecondsPerDay;
+    return seconds_offset < season_end_time_offset;
+}
+
+time_t ArenaConf::TimeLeftToNextSeason() const
+{
+    time_t now = fx::base::time::Now() / (1000000);
+    unsigned total = season_duration_ + off_season_duration_;
+    if (now < zero_point_) return zero_point_ - now;
+
+    const unsigned kSecondsPerDay = 3600 * 24;
+    unsigned delta_seconds = now - zero_point_;
+    unsigned seconds_offset = delta_seconds % (total * kSecondsPerDay);
+    unsigned next_season_start_time_offset = total * kSecondsPerDay;
+    return next_season_start_time_offset - seconds_offset;
 }

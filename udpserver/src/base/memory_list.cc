@@ -33,7 +33,7 @@ namespace fx
 
         MemoryList* MemoryList::CreateFrom(void * start, size_t len, size_t slice_size)
         {
-            std::auto_ptr<MemoryList> ptr(new MemoryList(slice_size));
+            std::unique_ptr<MemoryList> ptr(new MemoryList(slice_size));
             uintptr_t s = reinterpret_cast<uintptr_t>(start);
             void * end = reinterpret_cast<void*>(s + len);
             uintptr_t e = reinterpret_cast<uintptr_t>(end);
@@ -45,7 +45,6 @@ namespace fx
             ptr->header_->buffer_length = len;
             ptr->header_->magic_number = MemoryList::kMagicNumber;
             ptr->header_->slice_size = slice_size;
-            ptr->header_->used = kInvalidSliceId;
             ptr->header_->size = 0;
             ptr->start_ = start;
             ptr->end_ = end;
@@ -56,7 +55,7 @@ namespace fx
 
         MemoryList * MemoryList::RestoreFrom(void * start, size_t len, size_t slice_size)
         {
-            std::auto_ptr<MemoryList> ptr(new MemoryList(slice_size));
+            std::unique_ptr<MemoryList> ptr(new MemoryList(slice_size));
             uintptr_t s = reinterpret_cast<uintptr_t>(start);
             void * end = reinterpret_cast<void*>(s + len);
             uintptr_t e = reinterpret_cast<uintptr_t>(end);
@@ -147,6 +146,7 @@ namespace fx
 
         void MemoryList::MakeSliceList()
         {
+            header_->used = kInvalidSliceId;
             uintptr_t e = reinterpret_cast<uintptr_t>(end_);
             uintptr_t cur = reinterpret_cast<uintptr_t>(buf_);
 
@@ -193,6 +193,12 @@ namespace fx
             assert (diff % kSliceRealSize == 0);
 #endif
             return diff / kSliceRealSize;
+        }
+
+        void MemoryList::clear()
+        {
+            header_->size = 0;
+            MakeSliceList();
         }
     }
 }

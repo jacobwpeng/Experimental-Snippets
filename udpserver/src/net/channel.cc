@@ -72,7 +72,6 @@ namespace fx
             std::ostringstream oss;
             if (revents_ & EPOLLIN) oss << "EPOLLIN ";
             if (revents_ & EPOLLOUT) oss << "EPOLLOUT ";
-            if (revents_ & EPOLLRDHUP) oss << "EPOLLRDHUP ";
             if (revents_ & EPOLLPRI) oss << "EPOLLPRI ";
             if (revents_ & EPOLLERR) oss << "EPOLLERR ";
             if (revents_ & EPOLLHUP) oss << "EPOLLHUP ";

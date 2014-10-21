@@ -14,7 +14,6 @@
 #include <functional>
 #include <glog/logging.h>
 
-#include "file_system.h"
 #include "udp_server.h"
 #include "event_loop.h"
 #include "arena_conf.h"
@@ -52,6 +51,7 @@ std::unique_ptr<Container> RestoreOrCreate(std::unique_ptr<fx::base::MMapFile> &
 ArenaServer::ArenaServer(const std::string& ip, int port)
     :ip_(ip), port_(port)
 {
+    rand_.seed(std::mt19937_64::default_seed);
 }
 
 ArenaServer::~ArenaServer()
@@ -195,7 +195,8 @@ int ArenaServer::OnFindOpponent(const arenasvrd::Request & req, arenasvrd::Respo
     auto others_in_rank = [&](decltype(iter) iter) { 
                             auto & list = iter->second; 
                             return list->size() > 0 and (list->size() > 1 or list->back().uin != uin); 
-                        };
+                            };
+
     while (not others_in_rank(iter))
     {
         if (iter == lists_.begin()) break;
@@ -208,27 +209,24 @@ int ArenaServer::OnFindOpponent(const arenasvrd::Request & req, arenasvrd::Respo
         return 0;
     }
 
-    if (iter->second->back().uin == uin)
+    auto pos = iter->second->begin();
+    assert (pos != iter->second->end());
+    auto opponent_uin = pos->uin;
+    auto random_shift = rand_() % kMaxRandomShift;
+    if (random_shift > iter->second->size())
     {
-        auto & list = iter->second;
-        assert (list->size() > 1);
-        auto self = list->pop_back();            /* pop self out temporarily */
-        auto opponent = list->back();
-        auto list_node_id = list->push_back(self);
-        auto self_pos = active_->find(uin);
-        assert (self_pos->first == uin);
-        assert (list_node_id != ListType::kInvalidNodeId);
-        assert (self_pos != active_->end());
-        self_pos->second.list_node_id = list_node_id;
-        res->set_status(arenasvrd::Response_Status_OK);
-        res->set_opponent (opponent.uin);
+        random_shift = iter->second->size();
     }
-    else
+    decltype(random_shift) shift = 0;
+    while (++shift < random_shift) ++pos;
+
+    if (pos->uin != uin)
     {
-        auto opponent = iter->second->back();
-        res->set_status(arenasvrd::Response_Status_OK);
-        res->set_opponent (opponent.uin);
+        opponent_uin = pos->uin;
     }
+
+    res->set_status(arenasvrd::Response_Status_OK);
+    res->set_opponent (opponent_uin);
     return 0;
 }
 

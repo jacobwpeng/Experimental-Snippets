@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <random>
 #include "list.h"
 #include "rbtree.h"
 #include "arena_message.pb.h"
@@ -67,9 +68,11 @@ class ArenaServer
         std::unique_ptr<MapType> active_;
         std::map<unsigned, std::unique_ptr<fx::base::MMapFile>> mmaps_;
         std::map<unsigned, std::unique_ptr<ListType>> lists_;
+        std::mt19937_64 rand_;
         const std::string ip_;
         const int port_;
         static const size_t kMaxPersonInList = 200u;
+        static const unsigned kMaxRandomShift = 50;
 };
 
 #endif   /* ----- #ifndef __ARENA_SERVER_H__  ----- */

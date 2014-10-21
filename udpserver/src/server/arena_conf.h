@@ -28,13 +28,12 @@ class ArenaConf : boost::noncopyable
         size_t RankNumber() const { return ranks_.size(); }
         unsigned GetRankByPoints(unsigned points) const;
         bool InSeasonTime() const;
-        time_t TimeLeftToNextSeason() const;
+        int TimeLeftToNextSeason() const;
 
     private:
         ArenaConf();
         std::map<unsigned, unsigned> ranks_;     /* max_value -> rank */
-        unsigned season_duration_;
-        unsigned off_season_duration_;
+        unsigned end_day_;
         time_t zero_point_;
         std::string mmap_path_;
         size_t mmap_size_;

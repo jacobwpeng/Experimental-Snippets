@@ -14,6 +14,7 @@
 #include <functional>
 #include <glog/logging.h>
 
+#include "file_system.h"
 #include "udp_server.h"
 #include "event_loop.h"
 #include "arena_conf.h"
@@ -23,6 +24,30 @@ using fx::net::UdpServer;
 using fx::net::EventLoop;
 
 fx::net::EventLoop * ArenaServer::loop = NULL;
+
+template<typename Container>
+std::unique_ptr<Container> RestoreOrCreate(std::unique_ptr<fx::base::MMapFile> & file)
+{
+    std::unique_ptr<Container> res;
+    if (not file->newly_created())
+    {
+        res = Container::RestoreFrom(file->start(), file->size());
+        if (res) return res;
+
+        /* Restore failed */
+        LOG(WARNING) << "Restore from " << file->path() << " failed, try create";
+    }
+
+    if (res == NULL)
+    {
+        res = Container::CreateFrom(file->start(), file->size());
+        if (res) return res;
+
+        LOG(WARNING) << "Create from " << file->path() << " failed";
+    }
+
+    return NULL;
+}
 
 ArenaServer::ArenaServer(const std::string& ip, int port)
     :ip_(ip), port_(port)
@@ -54,31 +79,13 @@ int ArenaServer::Init(const std::string& conf_path)
         // i = 0 for rbtree
         if (i == 0)
         {
-            active_ = MapType::RestoreFrom(file->start(), file->size());
-            if (active_ == NULL)
-            {
-                LOG(WARNING) << "MapType::RestoreFrom failed, try Create";
-                active_ = MapType::CreateFrom(file->start(), file->size());
-                if (active_ == NULL)
-                {
-                    LOG(ERROR) << "Create RBTree failed.";
-                    return -3;
-                }
-            }
+            active_ = RestoreOrCreate<MapType>(file);
+            if (active_ == NULL) return -3;
         }
         else
         {
-            std::unique_ptr<ListType> list = ListType::RestoreFrom(file->start(), file->size());
-            if (list == NULL)
-            {
-                LOG(WARNING) << "ListType::RestoreFrom failed, try Create, rank = " << i;
-                list = ListType::CreateFrom(file->start(), file->size());
-                if (list == NULL)
-                {
-                    LOG(ERROR) << "Create List failed, i[" << i << "]";
-                    return -4;
-                }
-            }
+            auto list = RestoreOrCreate<ListType>(file);
+            if (list == NULL) return -4;
             lists_[i] = std::move(list);
         }
         mmaps_[i] = std::move(file);
@@ -156,10 +163,11 @@ void ArenaServer::ResetData(uint64_t iteration)
 {
     const unsigned kPeriod = 100;
 
-    if (iteration % kPeriod != 0) return;       /* run every 100 iteration */
+    if (iteration & 0xff) return;               /* run every 256 iteration */
 
     auto seconds_left = conf_->TimeLeftToNextSeason();
-    if (seconds_left >= 30 * 60) return;                /* reset in the last 30 mins */
+    const int kHalfHourSeconds = 30 * 60;
+    if (seconds_left >= kHalfHourSeconds) return;                /* reset in the last 30 mins */
 
     active_->clear();
     for (auto & l : lists_)

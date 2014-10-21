@@ -31,6 +31,69 @@ namespace fx
              *  format -> 2014-08-22 01:23:45
              *-----------------------------------------------------------------------------*/
             time_t StringToTime(const char * time);
+
+#if 0
+            class Year
+            {
+                public:
+                    bool valid() const;
+
+                private:
+                    Year(int y = -1);
+                    int y_;
+                    friend Year year(int y);
+            };
+
+            class Month
+            {
+                public:
+                    bool valid() const;
+
+                private:
+                    Month(int m = -1);
+                    int m_;
+                    friend Month month(int m);
+            };
+
+            class Day
+            {
+                public:
+                    bool valid() const;
+
+                private:
+                    Day(int d = -1);
+                    int d_;
+                    friend Day day(int d);
+            };
+
+            Year year(int y);
+            Month month(int m);
+            Day day(int d);
+
+            class DateTime
+            {
+                public:
+                    class Builder
+                    {
+                        public:
+                            Builder & set_year(int y); 
+                            Builder & set_month(int m);
+                            Builder & set_day(int d);
+
+                            Date Finish();
+                        private:
+                            int y_, m_, d_;
+                    };
+
+                private:
+                    DateTime();
+                    DateTime(int y, int m, int d);
+
+                private:
+                    time_t time_;
+                    friend class Builder;
+            };
+#endif
         }
     }
 }

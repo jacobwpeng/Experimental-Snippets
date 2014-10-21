@@ -17,6 +17,7 @@
 #include <boost/foreach.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
+#include <boost/date_time.hpp>
 #include <glog/logging.h>
 
 ArenaConf::ArenaConf()
@@ -35,8 +36,7 @@ ArenaConf * ArenaConf::ParseConf(const std::string& cont_path)
         boost::property_tree::read_xml(cont_path, pt, boost::property_tree::xml_parser::no_comments);
         conf->mmap_path_ = pt.get<std::string>("global.mmap.<xmlattr>.path");
         conf->mmap_size_ = pt.get<unsigned>("global.mmap.<xmlattr>.size");
-        conf->season_duration_ = pt.get<unsigned>("global.season_duration.<xmlattr>.val");
-        conf->off_season_duration_ = pt.get<unsigned>("global.off_season_duration.<xmlattr>.val");
+        conf->end_day_ = pt.get<unsigned>("global.switch_day.<xmlattr>.val");
         auto zero_point = pt.get<std::string>("global.zero_point.<xmlattr>.val");
         conf->zero_point_ = fx::base::time::StringToTime(zero_point.c_str());
 
@@ -82,26 +82,25 @@ unsigned ArenaConf::GetRankByPoints(unsigned points) const
 
 bool ArenaConf::InSeasonTime() const
 {
-    time_t now = fx::base::time::Now() / (1000000);
-    unsigned total = season_duration_ + off_season_duration_;
-    if (now < zero_point_) return false;
+    auto now = boost::posix_time::second_clock::local_time();
+    auto d = now.date();
 
-    const unsigned kSecondsPerDay = 3600 * 24;
-    unsigned delta_seconds = now - zero_point_;
-    unsigned seconds_offset = delta_seconds % (total * kSecondsPerDay);
-    unsigned season_end_time_offset = season_duration_ * kSecondsPerDay;
-    return seconds_offset < season_end_time_offset;
+    boost::posix_time::ptime start_time( boost::gregorian::date(d.year(), d.month(), 1), boost::posix_time::hours(6));
+    boost::posix_time::ptime end_time( boost::gregorian::date(d.year(), d.month(), end_day_), boost::posix_time::hours(6));
+
+    boost::posix_time::time_period tp(start_time, end_time);
+
+    return tp.contains(now);
 }
 
-time_t ArenaConf::TimeLeftToNextSeason() const
+int ArenaConf::TimeLeftToNextSeason() const
 {
-    time_t now = fx::base::time::Now() / (1000000);
-    unsigned total = season_duration_ + off_season_duration_;
-    if (now < zero_point_) return zero_point_ - now;
+    auto now = boost::posix_time::second_clock::local_time();
+    auto d = now.date();
 
-    const unsigned kSecondsPerDay = 3600 * 24;
-    unsigned delta_seconds = now - zero_point_;
-    unsigned seconds_offset = delta_seconds % (total * kSecondsPerDay);
-    unsigned next_season_start_time_offset = total * kSecondsPerDay;
-    return next_season_start_time_offset - seconds_offset;
+    boost::posix_time::ptime this_month_start_time (boost::gregorian::date(d.year(), d.month(), 1), boost::posix_time::hours(6));
+    boost::posix_time::ptime next_month_start_time = this_month_start_time + boost::gregorian::months(1);
+
+    if (now < this_month_start_time) return (this_month_start_time - now).total_seconds();
+    else return (next_month_start_time - now).total_seconds();
 }

@@ -36,16 +36,19 @@ namespace fx
                 ~MMapFile();
 
                 bool Inited() const;
+                bool newly_created() const;
 
                 void * start() const;
                 void * end() const;
                 size_t size() const;
+                const std::string& path() const;
 
             private:
                 const std::string path_;
                 size_t size_;
                 int fd_;
                 void * start_;
+                bool newly_created_;
         };
     }
 }

@@ -26,10 +26,9 @@ namespace fx
     namespace base
     {
         MMapFile::MMapFile(const std::string& path, size_t size, int flags)
-            :path_(path), size_(size), fd_(-1), start_(NULL)
+            :path_(path), size_(size), fd_(-1), start_(NULL), newly_created_(false)
         {
             int open_flags = O_RDWR;
-            bool newly_created = false;
             int fd = ::open(path.c_str(), open_flags, 0666);
             if (fd < 0)
             {
@@ -50,11 +49,11 @@ namespace fx
                     perror("open create");
                     return;
                 }
-                newly_created = true;
+                newly_created_ = true;
             }
 
             assert (fd >= 0);
-            if ((flags & truncate) or newly_created)
+            if ((flags & truncate) or newly_created_)
             {
                 ::ftruncate(fd, size_);
             }
@@ -102,6 +101,11 @@ namespace fx
             return fd_ >= 0 and start_ != NULL;
         }
 
+        bool MMapFile::newly_created() const
+        {
+            return newly_created_;
+        }
+
         void * MMapFile::start() const
         {
             assert (Inited());
@@ -118,6 +122,11 @@ namespace fx
         {
             assert (Inited());
             return size_;
+        }
+
+        const std::string& MMapFile::path() const
+        {
+            return path_;
         }
     }
 }

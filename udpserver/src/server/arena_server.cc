@@ -210,20 +210,23 @@ int ArenaServer::OnFindOpponent(const arenasvrd::Request & req, arenasvrd::Respo
     }
 
     auto pos = iter->second->begin();
-    assert (pos != iter->second->end());
     auto opponent_uin = pos->uin;
-    auto random_shift = rand_() % kMaxRandomShift;
-    if (random_shift > iter->second->size())
-    {
-        random_shift = iter->second->size();
-    }
-    decltype(random_shift) shift = 0;
-    while (++shift < random_shift) ++pos;
 
-    if (pos->uin != uin)
+    if (iter->second->size() > 1)
     {
-        opponent_uin = pos->uin;
+        auto random_shift = rand_() % kMaxRandomShift + 1;
+        if (random_shift >= iter->second->size())
+        {
+            random_shift = iter->second->size() - 1;
+        }
+        assert (random_shift > 0);
+        decltype(random_shift) shift = 0;
+        while (shift++ < random_shift) ++pos;
+
+        if (pos->uin != uin) opponent_uin = pos->uin;
     }
+
+    assert (opponent_uin != uin);
 
     res->set_status(arenasvrd::Response_Status_OK);
     res->set_opponent (opponent_uin);
@@ -251,10 +254,9 @@ int ArenaServer::OnUpdateSelf(const arenasvrd::Request & req, arenasvrd::Respons
         /* unlink from old rank list */
         auto node = self_pos->second;
         auto old_rank = node.rank;
-        auto rank_pos = lists_.find(old_rank);
-        assert (rank_pos != lists_.end());
-        list_node = rank_pos->second->Unlink(node.list_node_id);
-        auto victim_iter = active_->find(list_node.uin);
+        auto rank_list = lists_.find(old_rank);
+        assert (rank_list != lists_.end());
+        list_node = rank_list->second->Unlink(node.node_id);
         assert (list_node.uin == uin);
     }
 
@@ -275,22 +277,22 @@ int ArenaServer::OnUpdateSelf(const arenasvrd::Request & req, arenasvrd::Respons
         assert (count == 1);
     }
 
-    auto list_node_id = rank_pos->second->push_back(list_node);
-    assert (list_node_id != ListType::kInvalidNodeId);
+    auto node_id = rank_pos->second->push_back(list_node);
+    assert (node_id != ListType::kInvalidNodeId);
     //CAUTION : make sure your MapType DOESNOT invalidated iter by the previous pertential erase operation
     //self_pos = active_->find(uin);
     if (self_pos != active_->end())
     {
         /* update info in active */
         self_pos->second.rank = current_rank;
-        self_pos->second.list_node_id = list_node_id;
+        self_pos->second.node_id = node_id;
     }
     else
     {
         /* new node for this uin */
         TreeNode node;
         node.rank = current_rank;
-        node.list_node_id = list_node_id;
+        node.node_id = node_id;
         auto res = active_->insert(std::make_pair(uin, node));
         assert (res.second);
         (void) res;

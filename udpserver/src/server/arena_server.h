@@ -58,7 +58,7 @@ class ArenaServer
         struct TreeNode
         {
             unsigned rank;
-            ListType::NodeId list_node_id;
+            ListType::NodeId node_id;
         };
         typedef fx::base::container::RBTree<unsigned, TreeNode> MapType;
 

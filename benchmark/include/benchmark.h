@@ -66,6 +66,8 @@ namespace benchmark
     void AddBench(const std::string& name, int min_x, int max_x, int min_y, int max_y, 
             const BenchmarkFunc&, const BenchmarkFunc&, const BenchmarkFunc& );
 
+    void AddSimpleBench(const std::string& name, int min_x, int max_x, const BenchmarkFunc&);
+
     void ExecuteAll();
 }
 

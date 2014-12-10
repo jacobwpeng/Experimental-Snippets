@@ -85,10 +85,13 @@ bool ArenaConf::InSeasonTime() const
     auto now = boost::posix_time::second_clock::local_time();
     auto d = now.date();
 
-    boost::posix_time::ptime start_time( boost::gregorian::date(d.year(), d.month(), 1), boost::posix_time::hours(6));
-    boost::posix_time::ptime end_time( boost::gregorian::date(d.year(), d.month(), end_day_), boost::posix_time::hours(6));
+    auto shift = boost::posix_time::hours(6);
+
+    boost::posix_time::ptime start_time( boost::gregorian::date(d.year(), d.month(), 1), boost::posix_time::seconds(0));
+    boost::posix_time::ptime end_time( boost::gregorian::date(d.year(), d.month(), end_day_), boost::posix_time::seconds(0));
 
     boost::posix_time::time_period tp(start_time, end_time);
+    tp.shift(shift);
 
     return tp.contains(now);
 }

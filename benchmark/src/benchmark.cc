@@ -46,7 +46,7 @@ namespace detail
         if (needs_header)
         {
             std::cout << std::string(max_name_length + 1, ' ');
-            printf("           x               y       iteration(100us)          speed   (iteration/s)\n");
+            printf("           x               y       iteration(100us)          speed  (iteration/s)\n");
             needs_header = false;
         }
         if (name.size() >= max_name_length)
@@ -150,6 +150,11 @@ void AddBench(const std::string& name, int min_x, int max_x, int min_y, int max_
         const BenchmarkFunc& bench, const BenchmarkFunc& setup, const BenchmarkFunc& teardown)
 {
     BenchmarkMonitor::Instance()->Add(BenchmarkSuite(name, min_x, max_x, min_y, max_y, bench, setup, teardown));
+}
+
+void AddSimpleBench(const std::string& name, int min_x, int max_x, const BenchmarkFunc& func)
+{
+    return AddBench(name, min_x, max_x, 0, 0, func, NULL, NULL);
 }
 
 void ExecuteAll()

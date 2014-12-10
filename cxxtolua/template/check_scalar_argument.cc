@@ -1,0 +1,1 @@
+CheckArgument(L, ${idx}, &${arg})

@@ -10,6 +10,10 @@ from mako.template import Template
 
 template_path = '/home/work/repos/test/cxxtolua/template/'
 
+def to_cpp_bool(b):
+    assert isinstance(b, bool)
+    return b and 'true' or 'false'
+
 def sort_arg(one, other):
     assert isinstance(one, cpp_types.FunctionArgument)
     assert isinstance(other, cpp_types.FunctionArgument)
@@ -61,61 +65,91 @@ def get_arguments_declaration(function):
             cpp_type = arg.type_.cpp_type
         declarations.append (fmt % (cpp_type, arg_name))
 
-    #common declarations
-    declarations.append ('UserdataWrapper * __ud = NULL;')
-    declarations.append ('bool __check_failed = false;')
-    if function.parent.proto.kind == cpp_types.FunctionKind.Constructor:
-        class_ptr_decl = '%s * __class_ptr;' % function.parent.proto.fully_qualified_valid_variable_prefix
+    if function.parent.proto.kind == cpp_types.FunctionKind.ClassMemberMethod:
         if function.parent.is_const:
-            class_ptr_decl = 'const %s' % class_ptr_decl
+            class_ptr_decl = 'const %s * __class_ptr;' % function.parent.proto.fully_qualified_valid_variable_prefix
+        else:
+            class_ptr_decl = '%s * __class_ptr;' % function.parent.proto.fully_qualified_valid_variable_prefix
         declarations.append (class_ptr_decl)
 
     return os.linesep.join(declarations)
 
 def check_arguments(function):
     assert isinstance(function, cpp_types.SimpleFunction)
-    check_stmts = []
+    stmts = []
     arg_offset = 1
 
     if function.parent.proto.kind == cpp_types.FunctionKind.ClassMemberMethod:
-        template = Template(filename = template_path + 'check_userdata.cc')
-        check_const = ''
+        template = Template(filename = template_path + 'check_userdata_argument.cc')
         raw_cpp_type = '%s *' % function.parent.proto.fully_qualified_prefix
-        if not function.parent.is_const:
-            check_const = '&& !__ud->type_info.is_const'
-            cpp_type = raw_cpp_type
-        else:
-            cpp_type = 'const %s' % raw_cpp_type
-        check_stmts.append (template.render (arg_name = '__class_ptr', narg = 1, cpp_type = cpp_type, 
-            hashcode = hash(raw_cpp_type), check_const = check_const))
+        stmt = template.render(arg = '__class_ptr', idx = arg_offset, hashcode = hash(raw_cpp_type))
+        stmts.append(stmt)
         arg_offset += 1
 
     for idx, arg in enumerate([ function.parent.arguments[idx] for idx in xrange(0, function.argc) ]):
         arg_name = get_argument_name(arg, idx)
         narg = idx + arg_offset
-        if type_traits.is_signed_integer_type(arg.type_):
-            template = Template(filename = template_path + 'check_signed_integer.cc')
-            check_stmts.append (template.render(arg_name = arg_name, narg = narg))
-        elif type_traits.is_unsigned_integer_type(arg.type_):
-            template = Template(filename = template_path + 'check_unsigned_integer.cc')
-            check_stmts.append (template.render(arg_name = arg_name, narg = narg))
-        elif type_traits.is_real_number_type(arg.type_):
-            template = Template(filename = template_path + 'check_real.cc')
-            check_stmts.append (template.render(arg_name = arg_name, narg = narg))
-        elif type_traits.is_string_type(arg.type_):
-            template = Template(filename = template_path + 'check_string.cc')
-            check_stmts.append (template.render(arg_name = arg_name, narg = narg, std_string_hashcode = hash('std::basic_string<char> *')))
+
+        if type_traits.is_userdata_type(arg.type_):
+            template = Template(filename = template_path + 'check_userdata_argument.cc')
+            stat = template.render(arg = arg_name, idx = narg, hashcode = arg.type_.hashcode)
+            stmts.append (stat)
         else:
-            template = Template(filename = template_path + 'check_userdata.cc')
-            check_const = ''
-            if not arg.type_.is_const:
-                check_const = '&& !__ud->type_info.is_const'
-            check_stmts.append (template.render (arg_name = arg_name, narg = narg, cpp_type = arg.type_.cpp_type, 
-                hashcode = arg.type_.hashcode, check_const = check_const))
+            template = Template(filename = template_path + 'check_scalar_argument.cc')
+            stat = template.render(arg = arg_name, idx = narg)
+            stmts.append (stat)
+    return stmts
+    #return os.linesep.join(stmts)
 
-    return os.linesep.join (check_stmts)
+def get_arguments_in_function_call(function):
+    assert isinstance(function, cpp_types.SimpleFunction)
+    args = []
+    for idx, arg in enumerate([function.parent.arguments[idx] for idx in xrange(0, function.argc)]):
+        assert isinstance(arg, cpp_types.FunctionArgument)
+        argname = get_argument_name(arg, idx)
+        if type_traits.is_c_string_type(arg.type_):
+            args.append ('%s.c_str()' % argname)
+        elif type_traits.is_std_string_type(arg.type_):
+            args.append('%s' % argname)
+        elif type_traits.is_userdata_type(arg.type_) and (arg.type_.is_ref or arg.type_.is_class):
+            args.append('*%s' % argname)
+        else:
+            args.append('%s' % argname)
+    return ', '.join(args)
 
-def write_simple_functions(functions):
+def get_function_call(function):
+    assert isinstance(function, cpp_types.SimpleFunction)
+    default_method_template = Template('${funcname}(${args})')
+    class_method_template = Template('__class_ptr->${funcname}(${args})')
+
+    args = get_arguments_in_function_call(function)
+
+    if function.parent.proto.kind == cpp_types.FunctionKind.ClassMemberMethod:
+        function_call = class_method_template.render (funcname = function.parent.proto.name, args = args)
+    else:
+        function_call = default_method_template.render (funcname = function.parent.proto.fully_qualified_name, args = args)
+
+    return function_call
+
+def get_push_result(function, function_call):
+    assert isinstance(function, cpp_types.SimpleFunction)
+    type_ = function.parent.result.type_
+    if type_.is_void:
+        return '%s;%sreturn 0;' % (function_call, os.linesep)
+    elif type_traits.is_userdata_type(type_):
+        mt_name = type_.base_type_as_variable
+        if type_.is_ptr:
+            return Template('return PushResult(L, ${function_call}, ${is_const}, ${hashcode}, ${mt_name});').render(
+                    function_call = function_call, is_const = to_cpp_bool(type_.is_const)
+                    , hashcode = type_.hashcode, mt_name = mt_name)
+        else:
+            return Template('return PushResult(L, ${function_call}, ${needs_gc}, ${is_const}, ${hashcode}, ${mt_name});').render(
+                    function_call = function_call, needs_gc = to_cpp_bool(type_.is_class), is_const = to_cpp_bool(type_.is_const)
+                    , hashcode = type_.hashcode, mt_name = mt_name)
+    else:
+        return Template('return PushResult(L, (${function_call}));').render(function_call = function_call)
+
+def write_functions(functions):
     assert isinstance(functions, list)
     assert len(functions) > 0
     function = functions[0]
@@ -130,7 +164,11 @@ def write_single_simple_function(function):
     declarations = get_arguments_declaration(function)
 
     check_stmts = check_arguments(function)
-    print check_stmts
+    function_call = get_function_call(function)
+    push_result = get_push_result(function, function_call)
+    print declarations
+    if_stmt = Template('if (${cond}) { ${passed} }')
+    print if_stmt.render(cond = (' && ').join(check_stmts), passed = push_result)
     print '*' * 80
 
 def write_free_function(functions):
@@ -167,7 +205,7 @@ class LuaCodeGenerator:
             init_code = namespace_init_code_template.render(scope_name = scope.full_name)
             self._init_code.append (init_code)
             for simple_functions in scope.free_functions.itervalues():
-                self._function_code.append (write_simple_functions(simple_functions))
+                self._function_code.append (write_functions(simple_functions))
 
     def visit_class_scope(self, scope):
         class_init_code_template = Template(filename = template_path + 'class_init_code.cc')

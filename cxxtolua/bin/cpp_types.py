@@ -5,11 +5,18 @@ results of parsing cplusplus types
 from collections import defaultdict
 
 class Type:
-    def __init__(self):
-        self.base_type = 'base typename'
-        self.cpp_type = 'type of variable declaration in c++'
-        self.kind = 'type kind from libclang'
-        self.is_const = 'whether base_type is const'
+#    def __init__(self):
+#        self.base_type = 'base typename'
+#        self.cpp_type = 'type of variable declaration in c++'
+#        self.kind = 'type kind from libclang'
+#        self.is_const = 'whether base_type is const'
+
+    @property
+    def base_type_as_variable(self):
+        s = self.base_type
+        for c in ['::', '<', '>', ' ']:
+            s = s.replace(c, '_')
+        return s
 
     @property
     def hashcode(self):
@@ -18,6 +25,10 @@ class Type:
     @property
     def is_ref(self):
         return self.kind == 'LVALUEREFERENCE'
+
+    @property
+    def is_void(self):
+        return self.kind == 'VOID'
 
     @property
     def is_ptr(self):

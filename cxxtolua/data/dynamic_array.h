@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include <map>
+#include <list>
 #include <vector>
 #include <string>
 #include <boost/noncopyable.hpp>
@@ -40,9 +41,20 @@ namespace A
 
 namespace fx
 {
+#if 0
     LUA_EXPORT bool SayHello(const std::string& str, const std::string * ptr, const char * pMsg, std::string msg = "123");
-    LUA_EXPORT int SayHello(const std::string& str, double val);
+    std::string str;
+    const std::string * ptr;
+    std::string pMsg;
+    std::string msg;
+    CheckArgument(L, 1, str);
+    CheckArgument(L, 2, ptr);
+    CheckArgument(L, 3, pMsg);
+    CheckArgument(L, 4, msg);
+#endif
+    LUA_EXPORT int SayHello(const std::list<int>& str, double val, std::pair<int, int> p);
     LUA_EXPORT void SayHello(const std::vector<int>& vec, int val);
+    LUA_EXPORT std::vector<int> SayHello(std::string msg, const std::string * pMsg, const char* default_ = "Hehe");
     class DynamicArray : boost::noncopyable
     {
         public:

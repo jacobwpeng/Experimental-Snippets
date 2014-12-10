@@ -11,22 +11,21 @@ def is_integer_type(type_):
 def is_real_number_type(type_):
     return type_.kind in ['FLOAT', 'DOUBLE', 'LONGDOUBLE']
 
+def is_c_string_type(type_):
+    return type_.cpp_type == 'const char *'
+
+def is_std_string_type(type_):
+    return type_.base_type == 'std::basic_string<char>' and (type_.is_class or (type_.is_ref and type_.is_const))
 
 def is_string_type(type_):
     assert isinstance(type_, cpp_types.Type)
-    if type_.base_type == 'std::basic_string<char>':
-        if type_.is_class or (type_.is_ref and type_.is_const):
-            #const string& and string
-            return True
-        else:
-            return False
-    elif type_.cpp_type == 'const char *':
-        return True
-    else:
-        return False
+    return is_c_string_type(type_) or is_std_string_type(type_)
 
 def is_signed_integer_type(type_):
     return type_.kind in ["CHAR16", "CHAR32", "CHAR_S", "SCHAR", "WCHAR", "SHORT", "INT", "LONG", "LONGLONG", "INT128"]
 
 def is_unsigned_integer_type(type_):
     return type_.kind in ['CHAR_U', 'UCHAR', 'USHORT', 'UINT', 'ULONG', 'ULONGLONG', 'UINT128']
+
+def is_userdata_type(type_):
+    return not is_integer_type(type_) and not is_real_number_type(type_) and not is_string_type(type_)

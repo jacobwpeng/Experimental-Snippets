@@ -26,15 +26,12 @@ class Echo(Protocol):
     """
     As soon as any data is received, write it back.
     """
-    #log.msg('Receive {} Bytes'.format(len(data)))
     self._data += data
     if len(self._data) < 4:
       return
     if self._len is None:
       self._len = struct.unpack('I', self._data[:4])[0]
       self._data = self._data[4:]
-    #log.msg('Payload size: {}'.format(self._len))
-    #log.msg('Total: {}'.format(len(self._data)))
 
     if self._len and len(self._data) == self._len:
       self.OnMessage(self._data)
@@ -52,9 +49,9 @@ class Echo(Protocol):
         stdout = subprocess.PIPE)
     formatted = proc.communicate(fmt['file'])[0]
 
-    #log.msg('Reply size: {}'.format(len(formatted)))
     self.transport.write(struct.pack('I', len(formatted)))
     self.transport.write(formatted)
+    self.transport.loseConnection()
 
 logging.basicConfig(level=logging.WARNING)
 f = Factory()

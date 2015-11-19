@@ -8,13 +8,15 @@ import struct
 import pickle
 import tempfile
 import subprocess
+import logging
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor
 from twisted.python import log
+from twisted.application.internet import TCPServer
+from twisted.application.service import Application
 
-### Protocol Implementation
+TEMP_FORMAT_FILE_PATH='/tmp/.clang-format'
 
-# This is just about the simplest possible protocol
 class Echo(Protocol):
   def __init__(self):
     self._len = None
@@ -41,10 +43,11 @@ class Echo(Protocol):
     fmt = pickle.loads(data)
     print fmt
 
-    with open('.clang-format', 'w') as fd:
+    with open(TEMP_FORMAT_FILE_PATH, 'w') as fd:
       fd.write(fmt['format_file'])
 
-    proc = subprocess.Popen(['clang-format'],
+    proc = subprocess.Popen(['clang-format', '-style=file',
+      '-assume-filename={}'.format(TEMP_FORMAT_FILE_PATH)],
         stdin = subprocess.PIPE,
         stdout = subprocess.PIPE)
     formatted = proc.communicate(fmt['file'])[0]
@@ -53,12 +56,10 @@ class Echo(Protocol):
     self.transport.write(struct.pack('I', len(formatted)))
     self.transport.write(formatted)
 
-def main():
-  log.startLogging(sys.stdout)
-  f = Factory()
-  f.protocol = Echo
-  reactor.listenTCP(56789, f)
-  reactor.run()
+logging.basicConfig(level=logging.WARNING)
+f = Factory()
+f.protocol = Echo
 
-if __name__ == '__main__':
-  main()
+application = Application('ClangFormatServer')
+service = TCPServer(56789, f)
+service.setServiceParent(application)

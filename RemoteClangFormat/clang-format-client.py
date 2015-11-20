@@ -53,7 +53,7 @@ def Formats(content, args):
       data = sock.recv(reply_size)
       reply_size -= len(data)
       reply += data
-      return reply
+    return reply
   except socket.timeout, e:
     print 'Communicate to server timeout'
     sys.exit(-1)
@@ -74,7 +74,6 @@ def Format(fd, args):
     file_content = fd.read()
 
   reply = Formats(file_content, args)
-
   return head + reply + tail
 
 def WriteReply(fd, reply):

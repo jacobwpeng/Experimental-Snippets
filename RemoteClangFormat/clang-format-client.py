@@ -19,15 +19,14 @@ def ParseArgs():
       action = 'store',
       default = os.path.join(os.path.expanduser('~'), '.clang-format'),
       help = 'Format configure path')
+  parser.add_argument('-r', '--range', dest = 'range', metavar = ('Start', 'End'),
+      nargs = 2, type = int, help = 'Format range')
   parser.add_argument(dest = 'filenames', metavar = 'filename', nargs = '*')
   return parser.parse_args()
 
-def Format(filename, args):
-  with open(filename) as fd:
-    file_content = fd.read()
-
+def Formats(content, args):
   fmt = {
-      'file': file_content,
+      'file': content,
       'format_file': args.format_file_content
   }
 
@@ -54,15 +53,32 @@ def Format(filename, args):
       data = sock.recv(reply_size)
       reply_size -= len(data)
       reply += data
-
-    if args.inplace:
-      with open(filename, 'w') as fd:
-        fd.write(reply)
-    else:
-      sys.stdout.write(reply)
+      return reply
   except socket.timeout, e:
     print 'Communicate to server timeout'
     sys.exit(-1)
+
+def Format(fd, args):
+  file_content = ''
+  head = ''
+  tail = ''
+  if args.range:
+    for index, line in enumerate(fd):
+      if index + 1 < args.range[0]:
+        head += line
+      elif args.range[1] < index + 1:
+        tail += line
+      else:
+        file_content += line
+  else:
+    file_content = fd.read()
+
+  reply = Formats(file_content, args)
+
+  return head + reply + tail
+
+def WriteReply(fd, reply):
+  fd.write(reply)
 
 def main(args):
   if not os.path.isfile(args.format_file_path):
@@ -72,8 +88,17 @@ def main(args):
   with open(args.format_file_path) as fd:
     args.format_file_content = fd.read()
 
+  if not sys.stdin.isatty():
+    WriteReply(sys.stdout, Format(sys.stdin, args))
+
   for filename in args.filenames:
-    Format(filename, args);
+    with open(filename) as fd:
+      reply = Format(fd, args)
+    if args.inplace:
+      with open(filename, 'w') as fd:
+        WriteReply(fd, reply)
+    else:
+      WriteReply(sys.stdout, reply)
 
   sys.exit(0)
 
